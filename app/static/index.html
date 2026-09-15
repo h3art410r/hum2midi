@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f4ef">
+  <title>Make Anything Musical</title>
+  <style>
+    :root { color-scheme: light; --ink:#17211f; --muted:#68716d; --green:#caff4d; --paper:#f6f4ef; --line:#dcded7; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#dfe3dc; color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .stage { width:min(100%,1280px); min-height:100vh; position:relative; overflow:hidden; padding:clamp(24px,5vw,64px); background:var(--paper); display:flex; flex-direction:column; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .brand { font-size:14px; font-weight:750; letter-spacing:.06em; text-transform:uppercase; }
+    .tag { border:1px solid var(--line); border-radius:999px; padding:8px 12px; color:var(--muted); font-size:12px; }
+    main { width:min(720px,100%); margin:auto; text-align:center; padding:36px 0; }
+    .eyebrow { color:#4d6d00; font-size:12px; font-weight:750; letter-spacing:.16em; text-transform:uppercase; }
+    h1 { margin:14px 0 12px; font-size:clamp(38px,8vw,76px); line-height:.98; letter-spacing:-.065em; }
+    .intro { max-width:510px; margin:0 auto; color:var(--muted); line-height:1.65; font-size:16px; }
+    .record-wrap { margin:34px auto 18px; display:grid; justify-items:center; gap:13px; }
+    #record { border:0; width:148px; height:148px; border-radius:50%; background:var(--green); color:var(--ink); box-shadow:0 12px 36px #9cb84555; font-weight:800; cursor:pointer; touch-action:none; user-select:none; transition:transform .15s,background .15s; }
+    #record:active,#record.recording { transform:scale(.96); background:#b6ef2c; }
+    #record .mic { display:block; font-size:36px; margin-bottom:5px; }
+    #timer { min-height:24px; font-variant-numeric:tabular-nums; color:var(--muted); }
+    .hint { margin:0; color:var(--muted); font-size:13px; }
+    #status { min-height:25px; margin:12px 0; color:#4d6d00; font-size:14px; }
+    #preview { width:min(420px,100%); margin:0 auto 15px; }
+    audio { width:100%; height:40px; }
+    .actions { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; }
+    .fallback-upload { display:none; margin-top:10px; }
+    .fallback-upload label { display:block; margin-bottom:8px; color:var(--muted); font-size:13px; }
+    .fallback-upload input { display:block; width:100%; max-width:300px; margin:0 auto; font:inherit; font-size:13px; }
+    .fallback-upload button { margin-top:8px; }
+    .frontend-log { display:block; margin:14px 0 0; padding:10px; max-height:180px; overflow:auto; border:1px solid var(--line); border-radius:10px; background:#202522; color:#caff4d; text-align:left; white-space:pre-wrap; font:11px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    button.secondary { border:1px solid var(--line); border-radius:999px; padding:12px 18px; background:transparent; color:var(--ink); font:inherit; font-size:14px; cursor:pointer; }
+    button.primary { border-color:var(--ink); background:var(--ink); color:white; }
+    #results { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:26px; text-align:left; }
+    .card { padding:16px; border:1px solid var(--line); border-radius:16px; background:#fffefa; }
+    #results .card:first-child { grid-column:1/-1; }
+    .card h2 { margin:0 0 5px; font-size:16px; }
+    .card p { margin:0 0 10px; color:var(--muted); font-size:12px; }
+    #results .melody-debug { grid-column:1/-1; padding:0; border:1px solid var(--line); border-radius:16px; background:#fffefa; text-align:left; }
+    .melody-debug summary { padding:16px; cursor:pointer; font-weight:700; }
+    .melody-debug summary span { margin-left:8px; color:var(--muted); font-size:12px; font-weight:500; }
+    .melody-body { padding:0 16px 16px; }
+    .melody-meta { margin:0 0 10px; color:var(--muted); font-size:12px; }
+    .melody-chart-scroll { overflow-x:auto; }
+    .melody-chart { display:block; width:100%; min-width:700px; height:auto; }
+    .melody-chart text { fill:#68716d; font:11px ui-sans-serif,system-ui,sans-serif; }
+    .melody-chart .pitch-label { fill:#17211f; font-weight:650; }
+    .melody-chart .bar { fill:#a6d83c; stroke:#58751a; stroke-width:1; }
+    .melody-chart .bar.pitch-edge { stroke:#df7846; stroke-width:2.5; }
+    .melody-chart .phrase-line { stroke:#db765d; stroke-width:2; stroke-dasharray:5 4; }
+    .melody-chart .pitch-trace { fill:none; stroke:#475e9e; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; opacity:.88; }
+    .note-list { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; margin-top:10px; }
+    .note-cell { display:flex; align-items:center; gap:6px; min-width:0; border:1px solid var(--line); border-radius:9px; padding:6px 8px; font-size:12px; }
+    .note-cell b { color:var(--muted); font-size:10px; }
+    .note-cell small { margin-left:auto; color:var(--muted); font-size:10px; font-variant-numeric:tabular-nums; }
+    .note-cell .pitch-margin { flex:0 0 100%; margin-left:0!important; color:#bd5f31; font-weight:650; }
+    .hidden { display:none!important; }
+    footer { display:flex; justify-content:space-between; color:#8b918c; font-size:11px; }
+    @media (min-width:760px) { .stage { aspect-ratio:16/9; min-height:0; height:min(100vh,720px); } }
+    @media (min-width:760px) { .stage.expanded { aspect-ratio:auto; min-height:100vh; height:auto; align-self:start; } }
+    @media (max-width:520px) { body { background:var(--paper); } .stage { padding:24px 22px max(24px,env(safe-area-inset-bottom)); } header { align-items:flex-start; } .tag { max-width:130px; text-align:center; } main { padding:46px 0; } #record { width:136px;height:136px; } #results { grid-template-columns:1fr; } footer { margin-top:auto; } }
+    @media (max-width:760px) { .note-list { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <header><div class="brand">Make Anything Musical</div><div class="tag">把脑海中的旋律变成音乐</div></header>
+    <main>
+      <div class="eyebrow">Hum to Music</div>
+      <h1>哼出灵感，<br>听见新曲。</h1>
+      <p class="intro">录下一段熟悉的旋律，我们会为它编配两种不同风格。</p>
+      <div class="record-wrap">
+        <button id="record" type="button" aria-label="按住录音"><span class="mic">🎙️</span><span id="record-label">按住哼唱</span></button>
+        <div id="timer">00:00</div>
+        <p class="hint">按住 5–15 秒，松开即可试听</p>
+        <div id="fallback-upload" class="fallback-upload"><label for="audio-file">手机网页录音不可用，请直接选择音频文件</label><input id="audio-file" type="file" accept=".m4a,.mp4,.wav,.mp3,audio/mp4,audio/x-m4a,audio/wav,audio/mpeg" onchange="window.useSelectedAudioFile && window.useSelectedAudioFile()"><button id="use-file" class="secondary" type="button" onclick="document.getElementById('status').textContent='正在读取所选音频…'; document.getElementById('frontend-log').textContent += 'INLINE CLICK 使用此文件\n'; if (window.useSelectedAudioFile) window.useSelectedAudioFile();">使用此文件</button></div>
+      </div>
+      <div id="status" role="status" aria-live="polite">准备好就按住按钮开始</div>
+      <pre id="frontend-log" class="frontend-log" aria-label="前端调试日志">前端日志已启动，等待操作…
+</pre>
+      <audio id="preview" class="hidden" controls></audio>
+      <div class="actions"><button id="redo" class="secondary hidden" type="button">重录</button><button id="make" class="secondary primary hidden" type="button">生成我的版本</button></div>
+      <p class="hint">提交后，录音将发送至阿里云百炼核对旋律走向，并由程序测量音符和节奏。</p>
+      <div id="results" class="hidden"></div>
+    </main>
+    <footer><span>一段小小的哼唱，也能成为自己的作品。</span><span>Demo · 不保存作品历史</span></footer>
+  </div>
+  <script>
+    window.__h2mEarlyErrors = window.__h2mEarlyErrors || [];
+    window.addEventListener('error', event => {
+      window.__h2mEarlyErrors.push(`ERROR uncaught ${event.message || 'unknown'} @ ${event.filename || ''}:${event.lineno || ''}`);
+    });
+    window.addEventListener('unhandledrejection', event => {
+      window.__h2mEarlyErrors.push(`ERROR unhandledrejection ${event.reason?.message || event.reason || 'unknown'}`);
+    });
+    const recordButton = document.querySelector('#record');
+    const label = document.querySelector('#record-label');
+    const timer = document.querySelector('#timer');
+    const status = document.querySelector('#status');
+    const preview = document.querySelector('#preview');
+    const redo = document.querySelector('#redo');
+    const make = document.querySelector('#make');
+    const results = document.querySelector('#results');
+    const fallbackUpload = document.querySelector('#fallback-upload');
+    const audioFile = document.querySelector('#audio-file');
+    const useFile = document.querySelector('#use-file');
+    const frontendLog = document.querySelector('#frontend-log');
+    const stage = document.querySelector('.stage');
+    let mediaRecorder, stream, chunks = [], blob, blobUrl, startedAt, tick, jobPoll;
+    let stopping = false;
+    const log = (...parts) => {
+      if (!frontendLog) return;
+      frontendLog.style.display = 'block';
+      const line = `[${new Date().toLocaleTimeString()}] ${parts.map(part => typeof part === 'string' ? part : JSON.stringify(part)).join(' ')}`;
+      frontendLog.textContent += `${line}\n`;
+      frontendLog.scrollTop = frontendLog.scrollHeight;
+    };
+    const earlyErrors = window.__h2mEarlyErrors.splice(0);
+    const originalLogText = frontendLog?.textContent || '';
+    earlyErrors.forEach(message => { if (frontendLog) frontendLog.textContent += `${message}\n`; });
+    log('BOOT', 'script started', `secure=${window.isSecureContext}`, `mediaDevices=${!!navigator.mediaDevices}`, `MediaRecorder=${!!window.MediaRecorder}`);
+    log('DOM', `record=${!!recordButton}`, `file=${!!audioFile}`, `useFile=${!!useFile}`, `make=${!!make}`);
+
+    const fmt = seconds => `00:${String(Math.floor(seconds)).padStart(2,'0')}`;
+    const setStatus = text => { status.textContent = text; };
+
+    // Keep the in-page diagnostic log enabled without disruptive alert dialogs.
+    window.__H2M_DEBUG__ = false;
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      fallbackUpload.style.display = 'block';
+      recordButton.disabled = true;
+      recordButton.style.opacity = '.55';
+      setStatus('当前手机地址不是安全连接，无法直接调用麦克风；请用下方系统录音入口。');
+      log('CAPTURE_FALLBACK', 'native microphone unavailable');
+    } else {
+      log('CAPTURE_NATIVE', 'native microphone available');
+    }
+
+    const debugPopup = (title, detail) => {
+      if (window.__H2M_DEBUG__) window.alert(`${title}\n${detail}`);
+    };
+    async function debugFetch(url, options = {}) {
+      const method = options.method || 'GET';
+      log('REQ', method, url);
+      debugPopup('前端请求', `${method} ${url}`);
+      const response = await fetch(url, options);
+      const raw = await response.clone().text();
+      log('RESP', response.status, method, url, raw.slice(0, 500));
+      debugPopup('后端响应', `${method} ${url}\nHTTP ${response.status}\n${raw.slice(0, 500)}`);
+      return response;
+    }
+    function chooseMime() {
+      const choices = ['audio/mp4;codecs=mp4a.40.2','audio/mp4','audio/webm;codecs=opus','audio/webm'];
+      return choices.find(type => window.MediaRecorder && MediaRecorder.isTypeSupported(type)) || '';
+    }
+    async function begin() {
+      log('RECORD_BEGIN', 'pointer interaction received');
+      if (mediaRecorder?.state === 'recording') return;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+        chunks = [];
+        const mime = chooseMime();
+        mediaRecorder = mime ? new MediaRecorder(stream,{mimeType:mime}) : new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+        mediaRecorder.onstop = finishRecording;
+        mediaRecorder.start();
+        startedAt = Date.now();
+        stopping = false;
+        recordButton.classList.add('recording');
+        label.textContent = '正在录音…';
+        setStatus('正在听你的旋律');
+        clearInterval(tick);
+        tick = setInterval(() => {
+          const seconds = (Date.now() - startedAt) / 1000;
+          timer.textContent = fmt(seconds);
+          if (seconds >= 15) stopRecording();
+        },100);
+      } catch (error) {
+        setStatus(error.name === 'NotAllowedError' ? '请允许麦克风权限后再试。' : `无法开始录音：${error.message}`);
+      }
+    }
+    function stopRecording() {
+      log('RECORD_STOP', `state=${mediaRecorder?.state || 'none'}`);
+      if (!mediaRecorder || mediaRecorder.state !== 'recording' || stopping) return;
+      stopping = true;
+      clearInterval(tick);
+      mediaRecorder.stop();
+      stream?.getTracks().forEach(track => track.stop());
+      recordButton.classList.remove('recording');
+      label.textContent = '按住重录';
+    }
+    function finishRecording() {
+      log('RECORD_FINISH', `chunks=${chunks.length}`);
+      const seconds = (Date.now() - startedAt) / 1000;
+      if (seconds < 5) {
+        setStatus('再多哼一会儿，至少 5 秒才能生成。');
+        label.textContent = '按住哼唱';
+        return;
+      }
+      const mime = mediaRecorder.mimeType || 'audio/mp4';
+      blob = new Blob(chunks,{type:mime});
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      blobUrl = URL.createObjectURL(blob);
+      preview.src = blobUrl;
+      preview.classList.remove('hidden');
+      redo.classList.remove('hidden');
+      make.classList.remove('hidden');
+      results.classList.add('hidden');
+      setStatus('录好了。先听听，再生成两个版本。');
+    }
+    function useAudioFile(file) {
+      if (!file) { log('ERROR no file selected'); setStatus('请先选择一个音频文件。'); return; }
+      log('FILE', file.name, file.type || '(type empty)', `${file.size} bytes`);
+      if (!file.type.startsWith('audio/') && !/\.(m4a|mp4|wav|mp3)$/i.test(file.name)) {
+        setStatus('请选择 m4a、mp4、wav 或 mp3 音频文件。');
+        return;
+      }
+      blob = file;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      blobUrl = URL.createObjectURL(blob);
+      preview.src = blobUrl;
+      preview.classList.remove('hidden');
+      redo.classList.remove('hidden');
+      make.classList.remove('hidden');
+      results.classList.add('hidden');
+      setStatus(`已选择：${file.name}。先试听，再生成两个版本。`);
+      log('READY', 'audio preview created');
+      // On insecure mobile pages Safari may suppress synthetic/button events;
+      // submit the selected file directly so the server receives the request.
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        setTimeout(() => { if (blob === file && !make.disabled) make.click(); }, 120);
+      }
+    }
+    window.useSelectedAudioFile = () => {
+      log('USE_FILE_CLICK', `files=${audioFile.files?.length || 0}`);
+      setStatus('正在读取所选音频…');
+      useAudioFile(audioFile.files?.[0]);
+    };
+    audioFile.addEventListener('change', () => {
+      const file = audioFile.files?.[0];
+      useAudioFile(file);
+    });
+    audioFile.addEventListener('input', () => useAudioFile(audioFile.files?.[0]));
+    useFile.addEventListener('click', () => window.useSelectedAudioFile());
+    log('EVENTS_BOUND', 'file and action listeners registered');
+    recordButton.addEventListener('pointerdown', event => { event.preventDefault(); try { recordButton.setPointerCapture(event.pointerId); } catch (_) {} begin(); });
+    for (const eventName of ['pointerup','pointercancel','lostpointercapture']) recordButton.addEventListener(eventName, stopRecording);
+    recordButton.addEventListener('contextmenu', event => event.preventDefault());
+    redo.addEventListener('click', () => { preview.classList.add('hidden'); redo.classList.add('hidden'); make.classList.add('hidden'); results.classList.add('hidden'); timer.textContent='00:00'; setStatus('按住按钮重新哼唱。'); });
+    make.addEventListener('click', async () => {
+      log('GENERATE_CLICK', `blob=${!!blob}`, blob ? `${blob.size} bytes ${blob.type}` : 'none');
+      if (!blob) return;
+      make.disabled = true; redo.disabled = true; results.classList.add('hidden');
+      setStatus('正在上传录音，提取 MIDI 并由模型整体风格化…');
+      try {
+        log('UPLOAD_START', 'sending audio body');
+        const ext = blob.type.includes('webm') ? 'webm' : 'm4a';
+        const response = await debugFetch('/api/generations',{method:'POST',headers:{'Content-Type':blob.type,'X-Audio-Filename':`hum.${ext}`},body:blob});
+        const created = await response.json();
+        if (!response.ok) throw new Error(created.detail || '请求失败');
+        await poll(created.id);
+      } catch (error) {
+        log('ERROR', error.name || 'Error', error.message || String(error));
+        setStatus(`生成失败：${error.message}`);
+      } finally { make.disabled = false; redo.disabled = false; }
+    });
+    async function poll(id) {
+      let elapsed = 0;
+      log('POLL_START', id);
+      while (elapsed < 300) {
+        await new Promise(resolve => setTimeout(resolve,1800)); elapsed += 1.8;
+        const response = await debugFetch(`/api/generations/${id}`);
+        const job = await response.json();
+        log('POLL_STATE', id, job.status, job.message || '');
+        setStatus(job.message || '云端处理中…');
+        if (job.status === 'failed') throw new Error(job.error || '云端生成失败');
+        if (job.status === 'completed') { renderResults(job); return; }
+      }
+      throw new Error('等待超过 5 分钟，请稍后重试');
+    }
+    function renderResults(job) {
+      log('RESULTS_RENDER', `variants=${Object.keys(job.variants || {}).join(',')}`, `notes=${job.melody?.note_events?.length || 0}`);
+      const names = {funk:'Funk',lofi:'Lofi'};
+      const successful = Object.values(job.variants || {}).filter(item => item.status === 'completed');
+      results.innerHTML = successful.map(item => `<article class="card"><h2>${names[item.style] || item.style}</h2><p>${'模型把原始 MIDI 作为音乐种子重新创作风格，再渲染为音频'}</p><audio controls preload="none" src="${item.audio_url}"></audio></article>`).join('') + renderMelodyDebug(job.melody);
+      const debug = results.querySelector('#melody-debug');
+      debug?.addEventListener('toggle', () => stage.classList.toggle('expanded', debug.open));
+      results.classList.remove('hidden');
+      setStatus(successful.length === 2 ? '完成：两种模型风格音频已生成。' : successful.length ? '一个模型风格版本已就绪。' : '模型风格生成失败。');
+    }
+    function pitchName(midi) {
+      const names = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+      return `${names[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
+    }
+    function renderMelodyDebug(melody) {
+      const notes = melody?.note_events;
+      if (!Array.isArray(notes) || !notes.length) return '';
+      const safeNotes = notes.map(note => ({pitch:Number(note.pitch),start:Number(note.start),duration:Number(note.duration),margin:Number(note.quantization_margin_cents)}))
+        .filter(note => Number.isInteger(note.pitch) && Number.isFinite(note.start) && Number.isFinite(note.duration) && note.duration > 0);
+      if (!safeNotes.length) return '';
+      const trace = (Array.isArray(melody.pitch_trace) ? melody.pitch_trace : [])
+        .map(point => ({time:Number(point.time),pitch:Number(point.pitch)}))
+        .filter(point => Number.isFinite(point.time) && Number.isFinite(point.pitch));
+      const low = Math.floor(Math.min(...safeNotes.map(note => note.pitch), ...trace.map(point => point.pitch)));
+      const high = Math.ceil(Math.max(...safeNotes.map(note => note.pitch), ...trace.map(point => point.pitch)));
+      const end = Math.max(...safeNotes.map(note => note.start + note.duration), ...trace.map(point => point.time));
+      const width = 960, left = 58, right = 20, top = 22, row = 23, bottom = 28;
+      const height = top + (high - low + 1) * row + bottom;
+      const scale = (width - left - right) / Math.max(end, 0.1);
+      const y = pitch => top + (high - pitch) * row;
+      const grid = [];
+      for (let pitch = low; pitch <= high; pitch++) {
+        const yy = y(pitch) + row / 2;
+        grid.push(`<line x1="${left}" y1="${yy}" x2="${width-right}" y2="${yy}" stroke="#e8e9e4"/><text x="${left-8}" y="${yy+4}" text-anchor="end">${pitchName(pitch)}</text>`);
+      }
+      const timeGrid = [];
+      for (let second = 0; second <= Math.ceil(end); second++) {
+        const xx = left + second * scale;
+        timeGrid.push(`<line x1="${xx}" y1="${top}" x2="${xx}" y2="${height-bottom}" stroke="#eff0eb"/><text x="${xx}" y="${height-7}" text-anchor="middle">${second}s</text>`);
+      }
+      const phrases = (melody.phrase_boundaries || []).map(time => {
+        const xx = left + Number(time) * scale;
+        return `<line class="phrase-line" x1="${xx}" y1="${top}" x2="${xx}" y2="${height-bottom}"/>`;
+      }).join('');
+      const traceSegments = [];
+      let segment = [];
+      for (const point of trace) {
+        if (segment.length && point.time - segment[segment.length - 1].time > 0.11) {
+          if (segment.length > 1) traceSegments.push(segment);
+          segment = [];
+        }
+        segment.push(point);
+      }
+      if (segment.length > 1) traceSegments.push(segment);
+      const traceSvg = traceSegments.map(points => {
+        const d = points.map((point,index) => `${index ? 'L' : 'M'}${left + point.time * scale},${y(point.pitch) + row / 2}`).join(' ');
+        return `<path class="pitch-trace" d="${d}"/>`;
+      }).join('');
+      const bars = safeNotes.map((note,index) => {
+        const xx = left + note.start * scale, yy = y(note.pitch) + 3, ww = Math.max(3,note.duration * scale - 2);
+        const label = pitchName(note.pitch);
+        const edge = Number.isFinite(note.margin) && note.margin < 15;
+        const marginLabel = Number.isFinite(note.margin) ? `, ${note.margin.toFixed(1)} cents from semitone boundary` : '';
+        return `<g><title>${index+1}. ${label} (MIDI ${note.pitch}), ${note.start.toFixed(2)}s, ${note.duration.toFixed(2)}s${marginLabel}</title><rect class="bar${edge ? ' pitch-edge' : ''}" x="${xx}" y="${yy}" width="${ww}" height="${row-6}" rx="5"/><text class="pitch-label" x="${xx+ww/2}" y="${yy+row/2-1}" text-anchor="middle">${label}</text></g>`;
+      }).join('');
+      const cells = safeNotes.map((note,index) => `<div class="note-cell"><b>${String(index+1).padStart(2,'0')}</b><strong>${pitchName(note.pitch)}</strong><small>${note.start.toFixed(2)}s · ${note.duration.toFixed(2)}s</small>${Number.isFinite(note.margin) && note.margin < 15 ? `<small class="pitch-margin">距半音取整边界 ${note.margin.toFixed(1)}¢</small>` : ''}</div>`).join('');
+      const phraseCount = (melody.phrase_boundaries || []).length + 1;
+      const bpm = Number(melody.tempo_bpm);
+      return `<details id="melody-debug" class="melody-debug"><summary>逐音旋律调试视图<span>${safeNotes.length} 音 · ${phraseCount} 句 · ${Number.isFinite(bpm) ? bpm.toFixed(2) : '—'} BPM</span></summary><div class="melody-body"><p class="melody-meta">横轴为录音时间，纵轴为 MIDI 音高；绿色色块是 MIDI 音符，蓝线是连续基频测量，虚线为乐句边界；橙边表示音高接近半音取整边界。</p><div class="melody-chart-scroll"><svg class="melody-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="连续音高测量与MIDI音符对照图">${grid.join('')}${timeGrid.join('')}${phrases}${bars}${traceSvg}</svg></div><div class="note-list">${cells}</div></div></details>`;
+    }
+  </script>
+</body>
+</html>
+
