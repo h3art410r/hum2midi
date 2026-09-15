@@ -163,9 +163,26 @@ def _master_soundfont_wav(source: Path, output: Path, style: str) -> None:
             values[index] = math.tanh((sample + transient * 0.18) * 1.18) / math.tanh(1.18)
             previous = sample
 
+    # A short phrase still benefits from a producer-style energy arc.  The
+    # first section enters gently, the second phrase gets a small lift, and
+    # the tail releases instead of stopping at a hard level.  This is applied
+    # to the rendered audio bus so it never changes MIDI pitch or timing.
+    total = max(1, len(values) - 1)
+    for index, sample in enumerate(values):
+        progress = index / total
+        if progress < 0.08:
+            section_gain = 0.68 + progress / 0.08 * 0.32
+        elif progress > 0.86:
+            section_gain = 1.0 - (progress - 0.86) / 0.14 * 0.28
+        elif 0.48 <= progress <= 0.76:
+            section_gain = 1.06 if style == "funk" else 1.025
+        else:
+            section_gain = 1.0
+        values[index] = sample * section_gain
+
     peak = max((abs(value) for value in values), default=0.0)
     if peak:
-        gain = min(0.82 / peak, 2.5)
+        gain = 0.82 / peak
         values = [value * gain for value in values]
     output.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(output), "wb") as wav:
