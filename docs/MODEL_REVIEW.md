@@ -185,3 +185,5 @@
 为解决上述电子感问题，新增 `app/audio_renderer.py`：优先调用 FluidSynth 2.6.0 的 SoundFont 渲染，输出统一转换为 22.05 kHz 单声道 WAV；Funk 仅做轻微饱和/瞬态处理，Lofi 做低通/回声，MIDI 的 program、力度、鼓组和模型编曲保持不变。`AUDIO_RENDERER=auto` 自动选择，`AUDIO_RENDERER=soundfont` 用于验收时强制检查音源是否就绪，`procedural` 可复现旧版对照。
 
 本机已下载并实测 `GeneralUser-GS.sf2`：对 `e6651b913a304e30b3c4cf82d59cc19d` 的 Funk MIDI 直接渲染成功，FluidSynth 输出有效 WAV；服务健康检查现在报告 `fluidsynth-soundfont`。音源和 FluidSynth 二进制均放在被忽略的 `data/` 目录，不进入仓库提交。安装和许可证注意事项见 [`docs/SOUNDFONT.md`](SOUNDFONT.md)。
+
+演奏层与动态实验现场复测（2026-09-16）：真实 M4A 新 job `47401e1804974ddfae21b59d0b64c0b9` 完成，canonical MIDI 仍为 14 音、102.56 BPM，Funk/Lofi 风格 MIDI 分别为 106/48 音符；两个 WAV HTTP 200，API `renderers` 明确报告均为 `fluidsynth-soundfont`。新增 CC7/10/91/93、固定 seed 微时差/力度和总线能量弧线后，音频峰值均归一到 0.82。该轮证明新演奏层已进入真实端到端链路，主观“惊艳度”仍需手机盲听。
