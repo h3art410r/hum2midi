@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import math
 import os
 import re
 from typing import Any
@@ -510,6 +511,12 @@ def style_quality_issues(plan: dict[str, Any], ir: dict[str, Any], style: str) -
 def arrangement_to_midi(plan: dict[str, Any], style: str | None = None) -> bytes:
     midi = mido.MidiFile(ticks_per_beat=480)
     tempo = mido.bpm2tempo(float(plan.get("tempo_bpm", 100)))
+    style = style or "plain"
+    beat_seconds = 60.0 / max(50.0, min(200.0, float(plan.get("tempo_bpm", 100))))
+    try:
+        performance_seed = int(os.getenv("H2M_PERFORMANCE_SEED", "17"))
+    except ValueError:
+        performance_seed = 17
     for index, track_data in enumerate(plan.get("tracks", [])):
         track = mido.MidiTrack()
         midi.tracks.append(track)
@@ -533,12 +540,51 @@ def arrangement_to_midi(plan: dict[str, Any], style: str | None = None) -> bytes
             elif "harmony" in name or "chord" in name or "keys" in name or "pad" in name:
                 program = 7 if style == "funk" else 89 if style == "lofi" else program
             track.append(mido.Message("program_change", channel=channel, program=program, time=0))
+        name = str(track_data.get("name", "")).lower()
+        is_lead = "lead" in name or "melody" in name
+        is_drum = channel == 9 or "drum" in name or "perc" in name
+        # GM controllers make the same MIDI arrangement occupy a believable
+        # mix: lead stays central/front, harmony gets width and room, while
+        # bass remains centered. FluidSynth and hardware GM players both
+        # understand these controllers.
+        pan = 64
+        reverb = 18
+        chorus = 8
+        volume = 100
+        if style == "funk":
+            pan = 48 if is_lead else 82 if "harmony" in name or "keys" in name else 64
+            reverb = 10 if is_drum else 20 if is_lead else 14
+            chorus = 26 if is_lead else 12
+            volume = 108 if is_drum else 104 if is_lead else 94
+        elif style == "lofi":
+            pan = 54 if is_lead else 86 if "harmony" in name or "pad" in name else 64
+            reverb = 30 if is_drum else 48 if is_lead else 42
+            chorus = 34 if "harmony" in name or "pad" in name else 22
+            volume = 102 if is_lead else 88 if is_drum else 96
+        track.append(mido.Message("control_change", channel=channel, control=7, value=volume, time=0))
+        track.append(mido.Message("control_change", channel=channel, control=10, value=pan, time=0))
+        track.append(mido.Message("control_change", channel=channel, control=91, value=reverb, time=0))
+        track.append(mido.Message("control_change", channel=channel, control=93, value=chorus, time=0))
         events: list[tuple[float, int, int, int]] = []
-        for note in track_data.get("notes", []):
+        for note_index, note in enumerate(track_data.get("notes", [])):
             start = float(note["start"])
+            # Keep the measured lead grid exact. Backing parts get a tiny,
+            # deterministic performance offset so repeated MIDI hits do not
+            # collapse into a machine-perfect wall. The seed is configurable
+            # for A/B renders and reproducible bug reports.
+            if not is_lead:
+                phase = ((note_index + 1) * 1103515245 + performance_seed * 12345 + index * 97) & 0x7FFFFFFF
+                timing = ((phase % 9) - 4) * 0.0025
+                start = max(0.0, start + timing)
             end = start + float(note["duration"])
             pitch = int(note["pitch"])
             velocity = int(note.get("velocity", 72))
+            if not is_lead:
+                phase = ((note_index + 5) * 2654435761 + performance_seed * 40503 + index * 193) & 0xFFFFFFFF
+                variation = int(phase % 9) - 4
+                beat_phase = (start / beat_seconds) % 1.0
+                accent = 5 if style == "funk" and (beat_phase > 0.45 or is_drum and beat_phase < 0.12) else 0
+                velocity = max(1, min(127, velocity + variation + accent))
             events.append((start, 1, pitch, velocity))
             events.append((end, 0, pitch, 0))
         events.sort(key=lambda event: (event[0], event[1]))

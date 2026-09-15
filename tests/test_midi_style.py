@@ -1,4 +1,7 @@
+import io
 import unittest
+
+import mido
 
 from app.ir import midi_summary
 from app.midi_style import anchor_style_plan, arrangement_to_midi, validate_arrangement
@@ -41,6 +44,21 @@ class MidiStyleTests(unittest.TestCase):
         summary = midi_summary(arrangement_to_midi(plan))
         self.assertEqual(len(summary["note_events"]), 2)
         self.assertEqual({note["pitch"] for note in summary["note_events"]}, {48, 60})
+
+    def test_style_serializes_performance_controllers_deterministically(self):
+        plan = {
+            "tempo_bpm": 100,
+            "tracks": [
+                {"name": "lead", "program": 27, "notes": [{"pitch": 60, "start": 0, "duration": 0.4, "velocity": 88}]},
+                {"name": "harmony", "program": 4, "notes": [{"pitch": 64, "start": 0.25, "duration": 0.3, "velocity": 72}]},
+            ],
+        }
+        first = arrangement_to_midi(plan, style="funk")
+        second = arrangement_to_midi(plan, style="funk")
+        self.assertEqual(first, second)
+        midi = mido.MidiFile(file=io.BytesIO(first))
+        controls = [message.control for message in midi.tracks[1] if message.type == "control_change"]
+        self.assertEqual(controls, [7, 10, 91, 93])
 
     def test_style_model_can_rewrite_pitch_and_rhythm(self):
         ir = {"tempo_bpm": 100, "note_events": [
