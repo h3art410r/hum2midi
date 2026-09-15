@@ -1,0 +1,39 @@
+# 项目实验记忆
+
+## 2026-09-16：SoundFont 中间版本
+
+- Git 初始提交：`4b00575`，tag：`v0.1.0-soundfont`。
+- FluidSynth 2.6.0 + GeneralUser GS 已在 Windows 本机实渲染成功。
+- 应用通过 `app/audio_renderer.py` 自动选择 SoundFont；缺少外部音源时回退程序化合成器。
+- 二进制和音源在被忽略的 `data/` 目录，不进入 Git。
+
+## 2026-09-16：发散研究结论
+
+- 只扩充 MIDI 音符会很快变成“正确但像循环”的 Demo。
+- 真实感主要来自采样层、演奏法、力度/微时差、段落动态和总线处理，而不是继续收紧 MIDI Prompt。
+- SF2 适合通用基线；SFZ 更适合力度分层、round-robin、keyswitch、legato 和真实鼓组行为。后续可评估开源 `sfizz` 与 CC0 的 VSCO/VCSL 素材。
+- 更大胆的路线是让云端模型输出段落、角色、演奏法和能量曲线组成的 `ArrangementGraph`，再由程序生成 MIDI 与渲染控制，而不是让模型只返回音符数组。
+
+## 2026-09-16：演奏层实验
+
+- `arrangement_to_midi()` 新增 GM `CC7/CC10/CC91/CC93`：音量、声像、混响、合唱。
+- 非主奏伴奏使用 `H2M_PERFORMANCE_SEED` 产生可复现的微小时差和力度变化；主奏的核心起音、时值和音高保持不变。
+- `app/audio_renderer.py` 新增段落能量弧线：开头渐入、第二段轻推、结尾收束；FluidSynth 输出最后统一归一化到峰值 0.82。
+- 单元测试从 18 项增加到 19 项，全部通过。
+
+## 2026-09-16：真实端到端复测
+
+- 输入：项目已有真实哼唱 M4A（小星星，两句 14 音）。
+- job：`47401e1804974ddfae21b59d0b64c0b9`。
+- canonical MIDI：14 音，102.56 BPM，句界 5.64 秒。
+- Funk 风格 MIDI：106 音；Lofi 风格 MIDI：48 音。
+- 两个音频路由 HTTP 200，API `renderers` 均为 `fluidsynth-soundfont`。
+- 音符数量、BPM 和 MIDI 往返校验没有因演奏层变化而退化。
+- 当前尚未把“惊艳度”视为机器已证明的指标，必须继续用手机盲听 A/B。
+
+## 下一轮执行顺序
+
+1. 为 Funk/Lofi 建立轻量专用采样 profile 和演奏法映射。
+2. 让风格模型输出段落/能量元数据，程序生成可解释的 ArrangementGraph。
+3. 用固定 seed 做多个可复现的人性化版本，保留自动旋律约束并做盲听选择。
+4. 评估 SFZ 专用库和可选的云端最终总线处理；任何新服务都要记录成本、延迟、许可证和旋律保持率。
