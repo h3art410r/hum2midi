@@ -95,3 +95,4 @@
 - 随机候选 A/B 复测：同一真实 WAV 的 3 个音符、每个 2 次、候选顺序随机，Qwen Omni 命中率 `0/6`；回答标签随音符固定为 A/C，映射到的实际音高随顺序变化。该证据支持停止把通用 Omni 当逐音音高判别器。
 - 整段候选复测：候选复用原始人声片段和节奏，仅改整段音高序列，3 次随机顺序选择为 `smoothed`、`motif`、`smoothed`，没有选择 DSP 实测序列；因此也不能把通用 Omni 当作可靠的旋律校正器。
 - 调研并接入腾讯多媒体实验室 `vocalMidi` provider：官方能力是人声转录、计算音高和区间并输出 MIDI/JSON。由于腾讯任务只接受可访问 URL，应用新增随机 job id 的临时规范化 WAV 路由；启用前需要 `TENCENT_SECRET_ID`、`TENCENT_SECRET_KEY`、`H2M_PUBLIC_BASE_URL`，没有凭据不宣称效果。
+- 线上新增 `melody.wav` canonical MIDI 试听路由和页面卡片；job `64595c59ed27486687168b6c65a54904` 实测 `renderers.melody=fluidsynth-soundfont`，可直接与原始录音及两种风格音频盲听对照。
