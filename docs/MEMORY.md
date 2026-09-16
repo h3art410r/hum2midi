@@ -37,3 +37,13 @@
 2. 让风格模型输出段落/能量元数据，程序生成可解释的 ArrangementGraph。
 3. 用固定 seed 做多个可复现的人性化版本，保留自动旋律约束并做盲听选择。
 4. 评估 SFZ 专用库和可选的云端最终总线处理；任何新服务都要记录成本、延迟、许可证和旋律保持率。
+
+## 2026-09-16：demo 生产机部署
+
+- 目标机：`ubuntu@kr.sunyongfei.cn`，Ubuntu 24.04 / Python 3.12。
+- 部署目录：`/home/ubuntu/hum2midi`；systemd 服务 `hum2midi.service`，Uvicorn 监听 8000。
+- 已安装 FFmpeg、FluidSynth、`fluid-soundfont-gm`；服务器健康检查报告 `fluidsynth-soundfont`。
+- Nginx 已做 80→8000 反代，并由 Certbot 配置 HTTPS，HTTP 自动 301 到 `https://kr.sunyongfei.cn`。
+- API 密钥通过服务器 `.env` 注入，权限 600，不进入 Git、页面或日志。
+- 远程真实录音 job `fe96c26e463d472c857ddf76c69a8398` 完成：canonical 14 音，Funk/Lofi 风格 MIDI 137/46 音符，两个音频接口返回 200。
+- 部署细节见 `docs/DEPLOY.md`。
