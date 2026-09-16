@@ -91,6 +91,7 @@ async def create_generation(request: Request) -> JSONResponse:
         "ir": None,
         "pitch_trace": [],
         "renderers": {},
+        "source_path": str(source_path),
     }
     asyncio.create_task(_run_generation(job_id, source_path, job_dir))
     return JSONResponse({"id": job_id, "status": "queued"}, status_code=202)
@@ -101,7 +102,7 @@ async def get_generation(job_id: str) -> dict[str, Any]:
     job = JOBS.get(job_id)
     if not job:
         raise HTTPException(404, "Generation not found")
-    result = {key: value for key, value in job.items() if key not in {"ir", "pitch_trace"}}
+    result = {key: value for key, value in job.items() if key not in {"ir", "pitch_trace", "source_path"}}
     if job.get("ir"):
         ir = job["ir"]
         result["melody"] = {
@@ -137,6 +138,18 @@ async def get_audio(job_id: str, style: str) -> FileResponse:
     )
 
 
+@app.get("/api/generations/{job_id}/source")
+async def get_source(job_id: str) -> FileResponse:
+    """Serve the normalized, temporary source needed by external transcribers."""
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise HTTPException(404, "Generation not found")
+    job = JOBS.get(job_id)
+    path = Path(job.get("source_path", "")) if job else None
+    if not path or not path.is_file():
+        raise HTTPException(404, "Source audio is not ready")
+    return FileResponse(path, media_type="audio/wav", filename="source.wav", headers={"Cache-Control": "no-store"})
+
+
 async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
     job = JOBS[job_id]
     try:
@@ -149,7 +162,9 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
         transcription = resolve_transcription_engine()
         job["transcription_engine"] = transcription.name
         job["message"] = f"{transcription.name} 正在提取旋律 MIDI…"
-        analysis = await transcription.transcribe(audio_path)
+        public_base = os.getenv("H2M_PUBLIC_BASE_URL", "").strip().rstrip("/")
+        public_url = f"{public_base}/api/generations/{job_id}/source" if public_base else None
+        analysis = await transcription.transcribe(audio_path, public_url=public_url)
         if analysis["pitch_contour"] != contour:
             # Keep both observations for review instead of turning a coarse
             # multimodal disagreement into a false hard failure. The cloud

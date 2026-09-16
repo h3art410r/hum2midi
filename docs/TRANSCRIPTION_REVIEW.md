@@ -19,7 +19,8 @@
    ├─ Qwen Omni：独立音频理解（必做，输出 contour）
    └─ TranscriptionEngine：只负责逐音 MIDI
          ├─ dsp-yin（可重复基线）
-         └─ klangio-vocal-cloud（可选专业云端）
+         ├─ klangio-vocal-cloud（可选专业云端）
+         └─ tencent-vocal-cloud（可选大陆云端）
                     ↓
               Melody IR
                     ↓
@@ -44,6 +45,5 @@ Qwen Omni 的候选音高实验在 `docs/probe_multimodal_note_ranking.py`。它
 
 - Qwen Omni 可以稳定给出粗粒度旋律描述，但直接逐音 JSON 和候选半音选择都没有达到生产级稳定度。
 - YIN、Basic Pitch、pYIN、Praat 对当前录音的整数轮廓基本相互印证；`pitch_cents` + Pitch Bend 保留了人声偏离钢琴半音的细节。
-- Klangio `vocal` 是下一项有明确区分度的云端对照。配置 `TRANSCRIPTION_ENGINE=klangio` 和 `KLANGIO_API_KEY` 后才能真实测试；没有密钥时不能宣称它更准。
+- Klangio `vocal` 和腾讯 `vocalMidi` 都是下一项有明确区分度的云端对照。配置对应密钥后才能真实测试；没有密钥时不能宣称任一条路线更准。腾讯接口要求第三方通过 HTTPS URL 读取音频，因此应用只提供带随机 job id 的临时规范化 WAV 路由，不会把本地路径或密钥返回给前端。
 - 如果负责人要求“听起来像标准《小星星》”，那是意图校正问题，需要参考曲谱/调性或额外的云端音乐知识步骤；不能仅凭当前人声测量保证。
-

@@ -202,8 +202,11 @@
 | B | Qwen Omni 只在相邻 ±1 半音候选中选择 | `docs/probe_multimodal_note_ranking.py` 的随机候选仍有位置/极值偏置，多个音未选中真实音高 | 音频理解能力存在，但不适合当音高判别器 |
 | C | YIN、Basic Pitch、pYIN、Praat 交叉测量 | 四条路线的整数音高轮廓基本一致；pYIN/Praat 没有减少这段录音的错误，且 pYIN 首次编译很慢 | 当前 DSP 结果有独立交叉证据，剩余误差主要是人声滑音和半音量化 |
 | D | Klangio `vocal` 云端专用转谱模型 | 已完成 provider adapter，尚未配置该服务密钥，不能把“未实测”写成通过 | 这是下一项真正有区分度的云端 A/B |
+| E | 腾讯多媒体实验室 `vocalMidi` | 已完成异步任务 provider adapter；需要腾讯 SecretId/SecretKey 和 HTTPS 音频 URL，尚未配置凭据 | 大陆可用性和人声转 MIDI 定位更贴近本项目，优先于继续调 Qwen Prompt |
 
 Klangio 的官方 API 明确提供 Vocal 转谱模型、MIDI 输出和异步任务流程：[API 总览](https://api-docs.klang.io/)、[基础任务流程](https://api-docs.klang.io/docs/getting-started/basic-job-workflow)、[转录模型选择](https://api-docs.klang.io/docs/advanced-usage/transcription-model-selection)。它是面向音乐转谱的服务，和 Qwen Omni 的通用音频理解定位不同；是否更准必须用同一份录音实测后再决定。
+
+腾讯多媒体实验室的官方文档也明确写出“人声转录”会计算每个音符的音高和区间并输出 MIDI/JSON，并提供 `CreateJob`/`GetJob` 异步任务流程：[Vocal To Midi](https://multimedia.tencent.com/en/docs/smart-music/api/10-vocal-to-midi/)、[智能音乐简介](https://multimedia.tencent.com/zh/docs/smart-music/about/introduction/)。该接口要求第三方通过 HTTPS URL 读取输入，因此代码增加了按随机 job id 暴露的临时规范化 WAV 路由；密钥和服务器本地路径不会出现在 API 响应或日志中。
 
 当前已做的音准保真处理是：IR 保存 `pitch_cents`，标准 MIDI 写入 ±2 半音 Pitch Bend，并合并尾部同音短碎片；这些处理改善了“整数音名相同但播放偏”的情况，却不能把一段离调哼唱自动纠正成用户脑中的标准曲谱。若验收标准是“还原用户实际唱的音高”，当前 DSP 基线已经有稳定证据；若标准是“猜出用户想唱的标准旋律”，需要提供参考音频/调性或使用专门的云端转谱模型，不能靠继续堆通用 Prompt 保证。
 

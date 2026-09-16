@@ -9,6 +9,7 @@ from app.transcription import (
     CloudTranscriptionError,
     DspTranscriptionEngine,
     KlangioTranscriptionEngine,
+    TencentTranscriptionEngine,
     _midi_to_analysis,
     resolve_transcription_engine,
 )
@@ -30,6 +31,16 @@ class TranscriptionBoundaryTests(unittest.TestCase):
         with patch.dict(os.environ, {"TRANSCRIPTION_ENGINE": "klangio", "KLANGIO_API_KEY": ""}, clear=False):
             with self.assertRaises(CloudTranscriptionError):
                 resolve_transcription_engine()
+
+    def test_auto_prefers_tencent_when_both_cloud_credentials_exist(self):
+        with patch.dict(os.environ, {
+            "TRANSCRIPTION_ENGINE": "auto",
+            "TENCENT_SECRET_ID": "id",
+            "TENCENT_SECRET_KEY": "key",
+            "KLANGIO_API_KEY": "test-key",
+        }, clear=False):
+            engine = resolve_transcription_engine()
+        self.assertIsInstance(engine, TencentTranscriptionEngine)
 
     def test_unknown_engine_does_not_silently_fallback(self):
         with patch.dict(os.environ, {"TRANSCRIPTION_ENGINE": "made-up", "KLANGIO_API_KEY": ""}, clear=False):
