@@ -21,6 +21,7 @@ from app.ir import melody_to_midi
 from app.midi_style import MidiStyleError, QwenMidiStyleClient, arrangement_to_midi
 from app.pitch_tracking import PitchTrackingError, extract_hummed_notes
 from app.audio_renderer import render_audio, renderer_status
+from app.transcription import CloudTranscriptionError, transcribe_with_klangio
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent
@@ -49,6 +50,7 @@ async def health() -> dict[str, str]:
         "audio_understanding": "qwen-omni-cloud",
         "renderer": renderer_status(),
         "midi_style_model": os.getenv("QWEN_TEXT_MODEL", "qwen-flash"),
+        "transcription_engine": os.getenv("TRANSCRIPTION_ENGINE", "dsp").strip().lower(),
     }
 
 
@@ -139,7 +141,14 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
         job["status"] = "understanding"
         job["message"] = "云端正在理解哼唱，并准备旋律 MIDI…"
         contour = await audio_client.analyze_pitch_contour(audio_path)
-        analysis = extract_hummed_notes(audio_path)
+        engine = os.getenv("TRANSCRIPTION_ENGINE", "dsp").strip().lower()
+        if engine in {"klangio", "auto"} and os.getenv("KLANGIO_API_KEY", "").strip():
+            job["message"] = "云端 Vocal 转谱模型正在提取精确 MIDI…"
+            analysis = await transcribe_with_klangio(audio_path)
+        elif engine == "klangio":
+            raise CloudTranscriptionError("已选择 Klangio Vocal 转谱，但服务端未配置 KLANGIO_API_KEY。")
+        else:
+            analysis = extract_hummed_notes(audio_path)
         if analysis["pitch_contour"] != contour:
             raise AudioUnderstandingError("云端听到的旋律走向与录音分析不一致，请重录后重试。")
         midi_data, ir = melody_to_midi(analysis)
@@ -223,6 +232,8 @@ def _friendly_error(exc: Exception) -> str:
     if isinstance(exc, PitchTrackingError):
         return str(exc)
     if isinstance(exc, MidiStyleError):
+        return str(exc)
+    if isinstance(exc, CloudTranscriptionError):
         return str(exc)
     if isinstance(exc, HTTPException):
         return str(exc.detail)
