@@ -101,6 +101,7 @@ def extract_hummed_notes(path: Path) -> dict[str, Any]:
                 "confidence": round(confidence, 3),
             })
 
+    notes = _merge_same_pitch_fragments(notes)
     if len(notes) < 2:
         raise PitchTrackingError("没有检测到足够清晰的连续哼唱音符。")
 
@@ -158,6 +159,48 @@ def _regions(active: np.ndarray) -> list[tuple[int, int]]:
             regions.append((start, i))
             start = None
     return regions
+
+
+def _merge_same_pitch_fragments(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge a tiny boundary fragment back into an adjacent same-pitch note.
+
+    Low-energy singers often produce one extra 150–250ms segment at the end
+    of a held note when the F0 tracker briefly crosses a boundary. Only merge
+    adjacent equal MIDI pitches with a near-zero gap and a clearly short
+    fragment; intentional repeated notes and fast melodies remain separate.
+    """
+    merged: list[dict[str, Any]] = []
+    for current in notes:
+        if not merged:
+            merged.append(current)
+            continue
+        previous = merged[-1]
+        previous_end = float(previous.get("start", 0.0)) + float(previous.get("duration", 0.0))
+        gap = float(current.get("start", 0.0)) - previous_end
+        same_pitch = int(previous.get("pitch", -1)) == int(current.get("pitch", -2))
+        short_fragment = min(float(previous.get("duration", 0.0)), float(current.get("duration", 0.0))) < 0.30
+        if same_pitch and -0.015 <= gap <= 0.08 and short_fragment:
+            previous_duration = float(previous.get("duration", 0.0))
+            current_duration = float(current.get("duration", 0.0))
+            total_duration = previous_duration + max(0.0, gap) + current_duration
+            if total_duration > 0:
+                previous["pitch_cents"] = round(
+                    (float(previous.get("pitch_cents", 0.0)) * previous_duration
+                     + float(current.get("pitch_cents", 0.0)) * current_duration)
+                    / (previous_duration + current_duration),
+                    1,
+                )
+            previous["duration"] = round(total_duration, 3)
+            previous["confidence"] = round(min(
+                float(previous.get("confidence", 0.5)),
+                float(current.get("confidence", 0.5)),
+            ), 3)
+            previous["quantization_margin_cents"] = round(
+                max(0.0, 50.0 - abs(float(previous.get("pitch_cents", 0.0)))), 1
+            )
+        else:
+            merged.append(current)
+    return merged
 
 
 def _split_at_pitch_changes(

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from app.pitch_tracking import _classify_contour, extract_hummed_notes
+from app.pitch_tracking import _classify_contour, _merge_same_pitch_fragments, extract_hummed_notes
 from app.ir import melody_to_midi, midi_summary
 
 
@@ -102,6 +102,16 @@ class PitchTrackingTests(unittest.TestCase):
     def test_contour_classifier_handles_both_directions(self):
         self.assertEqual(_classify_contour([44, 44, 52, 52, 54, 54, 52, 50, 46, 44]), "ascending_then_descending")
         self.assertEqual(_classify_contour([54, 52, 50, 48, 49, 52, 54]), "descending_then_ascending")
+
+    def test_merges_short_same_pitch_boundary_fragment(self):
+        notes = [
+            {"pitch": 49, "start": 0.0, "duration": 0.7, "pitch_cents": 8.0, "confidence": 0.9},
+            {"pitch": 48, "start": 0.71, "duration": 0.25, "pitch_cents": -4.0, "confidence": 0.8},
+            {"pitch": 48, "start": 0.96, "duration": 0.55, "pitch_cents": 2.0, "confidence": 0.95},
+        ]
+        merged = _merge_same_pitch_fragments(notes)
+        self.assertEqual([note["pitch"] for note in merged], [49, 48])
+        self.assertAlmostEqual(merged[1]["duration"], 0.8, places=3)
 
     def test_high_register_fast_repeats_and_phrase_pause(self):
         sample_rate = 16_000
