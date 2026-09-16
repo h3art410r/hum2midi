@@ -58,6 +58,9 @@ def find_soundfont() -> Path | None:
         ROOT / "data" / "soundfonts" / "GeneralUser-GS.sf2",
         ROOT / "data" / "soundfonts" / "FluidR3_GM.sf2",
         ROOT / "data" / "soundfonts" / "FluidR3_GS.sf2",
+        Path("/usr/share/sounds/sf2/FluidR3_GM.sf2"),
+        Path("/usr/share/sounds/sf2/default-GM.sf2"),
+        Path("/usr/share/sounds/sf3/default-GM.sf3"),
     ])
 
 
