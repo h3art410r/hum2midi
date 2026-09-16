@@ -198,7 +198,15 @@ def _to_wav(source: Path) -> Path:
     try:
         ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
         subprocess.run(
-            [ffmpeg, "-y", "-i", str(source), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(target)],
+            [
+                ffmpeg, "-y", "-i", str(source), "-vn",
+                # Phone recordings can arrive 10–15 dB below nominal level.
+                # Normalize the analysis copy so pitch/onset detection does
+                # not reject a quiet but otherwise valid humming take. The
+                # original upload remains untouched for playback/download.
+                "-af", "loudnorm=I=-14:TP=-1.0:LRA=7",
+                "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(target),
+            ],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,

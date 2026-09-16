@@ -110,6 +110,7 @@
     const frontendLog = document.querySelector('#frontend-log');
     const stage = document.querySelector('.stage');
     let mediaRecorder, stream, chunks = [], blob, blobUrl, startedAt, tick, jobPoll;
+    let previewContext, previewSourceNode, previewGainNode, previewCompressor;
     let stopping = false;
     const log = (...parts) => {
       if (!frontendLog) return;
@@ -118,6 +119,38 @@
       frontendLog.textContent += `${line}\n`;
       frontendLog.scrollTop = frontendLog.scrollHeight;
     };
+    function setPreviewSource(url) {
+      preview.src = url;
+      preview.volume = 1;
+      // The microphone/file can be recorded at a very low level. Route the
+      // preview through a modest Web Audio makeup gain so the user can hear
+      // the actual take on a phone; the uploaded bytes stay unchanged.
+      if (!previewContext) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          try {
+            previewContext = new AudioContextClass();
+            previewSourceNode = previewContext.createMediaElementSource(preview);
+            previewGainNode = previewContext.createGain();
+            previewGainNode.gain.value = 2.4;
+            previewCompressor = previewContext.createDynamicsCompressor();
+            previewCompressor.threshold.value = -8;
+            previewCompressor.knee.value = 12;
+            previewCompressor.ratio.value = 6;
+            previewCompressor.attack.value = 0.003;
+            previewCompressor.release.value = 0.25;
+            previewSourceNode.connect(previewGainNode).connect(previewCompressor).connect(previewContext.destination);
+            log('PREVIEW_GAIN', 'WebAudio makeup gain=2.4x with soft compressor');
+          } catch (error) {
+            log('PREVIEW_GAIN_UNAVAILABLE', error.message || String(error));
+            previewContext = null;
+          }
+        } else {
+          log('PREVIEW_GAIN_UNAVAILABLE', 'AudioContext unavailable');
+        }
+      }
+      previewContext?.resume().catch(error => log('PREVIEW_AUDIO_RESUME_ERROR', error.message || String(error)));
+    }
     const earlyErrors = window.__h2mEarlyErrors.splice(0);
     const originalLogText = frontendLog?.textContent || '';
     earlyErrors.forEach(message => { if (frontendLog) frontendLog.textContent += `${message}\n`; });
@@ -204,7 +237,7 @@
       blob = new Blob(chunks,{type:mime});
       if (blobUrl) URL.revokeObjectURL(blobUrl);
       blobUrl = URL.createObjectURL(blob);
-      preview.src = blobUrl;
+      setPreviewSource(blobUrl);
       preview.classList.remove('hidden');
       redo.classList.remove('hidden');
       make.classList.remove('hidden');
@@ -221,7 +254,7 @@
       blob = file;
       if (blobUrl) URL.revokeObjectURL(blobUrl);
       blobUrl = URL.createObjectURL(blob);
-      preview.src = blobUrl;
+      setPreviewSource(blobUrl);
       preview.classList.remove('hidden');
       redo.classList.remove('hidden');
       make.classList.remove('hidden');

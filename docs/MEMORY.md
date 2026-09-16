@@ -54,3 +54,11 @@
 - SoundFont 母带新增轻度总线压缩（Funk ratio 2.2、Lofi ratio 2.5）和补偿增益，峰值目标从 `-1.7 dBFS` 提到 `-0.7 dBFS`，同时保留段落能量弧线与停顿。
 - 生产机已重启并重渲染 `fe96c26e463d472c857ddf76c69a8398`；新测得 Funk 平均电平 `-16.7 dB`、Lofi `-15.8 dB`，两个接口继续返回 200。
 - 音频接口增加 `Cache-Control: no-store`，避免浏览器继续播放响度修复前缓存的同名 WAV。
+
+## 2026-09-16：低音量原始录音修复
+
+- 复查用户原始 M4A 发现源文件峰值约 `-11.6 dBFS`，此前的峰值母带修复无法解决“原始录音试听很小”，低电平还会触发“没有检测到足够清晰的连续哼唱音符”。
+- `app/main.py` 的分析副本转换增加 FFmpeg `loudnorm=I=-14:TP=-1.0:LRA=7`；只归一化服务端分析副本，不改写用户上传的原始文件。用同一真实录音线上复测得到 14 音、两句、102.56 BPM，说明归一化没有改变旋律结果。
+- `app/static/index.html` 的原始试听通过 Web Audio 2.4x makeup gain 与软压缩播放，保留原始上传字节；不依赖把 HTML audio 的 `volume` 设到超过 1。
+- `app/audio_renderer.py` 增加 RMS 复测、软限幅和两轮有效段增益，避免 Lofi 因高峰均比被单纯峰值归一化压回低音量。线上重渲染 job `09d79eef1be2448b8645ce58d3f13bd4`：Funk 平均 `-12.4 dB`、峰值 `-1.7 dBFS`；Lofi 平均 `-13.7 dB`、峰值 `-0.7 dBFS`。
+- 本轮 `.venv\Scripts\python.exe -m unittest discover -s tests -q`：19 项通过。

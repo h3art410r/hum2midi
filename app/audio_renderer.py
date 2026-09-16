@@ -188,9 +188,9 @@ def _master_soundfont_wav(source: Path, output: Path, style: str) -> None:
     # comes forward enough that the result does not feel quieter than the
     # source recording.  This is deliberately gentle and keeps the phrase
     # pauses below the compressor threshold.
-    threshold = 0.16
-    ratio = 2.2 if style == "funk" else 2.5
-    makeup = 1.16 if style == "funk" else 1.12
+    threshold = 0.075 if style == "funk" else 0.055
+    ratio = 5.0 if style == "funk" else 10.0
+    makeup = 1.32 if style == "funk" else 1.42
     for index, sample in enumerate(values):
         magnitude = abs(sample)
         if magnitude > threshold:
@@ -198,9 +198,54 @@ def _master_soundfont_wav(source: Path, output: Path, style: str) -> None:
             values[index] = math.copysign(magnitude, sample)
         values[index] *= makeup
 
+    # Match active musical material rather than the whole file (which also
+    # contains the user's deliberate phrase silence). This is the part that
+    # determines perceived phone loudness. A hard cap keeps the final limiter
+    # from lifting hiss in a silent gap.
+    active = [abs(value) for value in values if abs(value) >= 0.018]
+    if active:
+        active_rms = math.sqrt(sum(value * value for value in active) / len(active))
+        target_rms = 0.32 if style == "funk" else 0.30
+        if active_rms > 0:
+            boost = min(target_rms / active_rms, 3.0)
+            values = [value * boost for value in values]
+
+    # RMS matching can produce musical transients above full scale. A plain
+    # peak normalizer would undo the loudness lift (especially on lofi, which
+    # has a high crest factor), so tame only the top end with a soft limiter.
+    # This keeps the average level up while avoiding hard digital clipping.
+    knee = 0.68
+    ceiling = 0.96
+    knee_span = ceiling - knee
+    def soft_limit(signal: list[float]) -> list[float]:
+        limited: list[float] = []
+        for value in signal:
+            magnitude = abs(value)
+            if magnitude > knee:
+                magnitude = knee + knee_span * math.tanh((magnitude - knee) / knee_span)
+                value = math.copysign(magnitude, value)
+            limited.append(value)
+        return limited
+
+    values = soft_limit(values)
+    # Re-measure after limiting. This second RMS pass is what makes a quiet
+    # lofi arrangement audibly present instead of letting one transient dictate
+    # the gain for the entire track. Two short passes converge without lifting
+    # the intentional phrase silence.
+    target_active_rms = 0.30 if style == "funk" else 0.28
+    for _ in range(2):
+        active = [abs(value) for value in values if abs(value) >= 0.018]
+        if not active:
+            break
+        active_rms = math.sqrt(sum(value * value for value in active) / len(active))
+        if active_rms <= 0:
+            break
+        gain = min(target_active_rms / active_rms, 6.0)
+        values = soft_limit([value * gain for value in values])
+
     peak = max((abs(value) for value in values), default=0.0)
-    if peak:
-        gain = 0.92 / peak
+    if peak > 0.96:
+        gain = 0.96 / peak
         values = [value * gain for value in values]
     output.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(output), "wb") as wav:
