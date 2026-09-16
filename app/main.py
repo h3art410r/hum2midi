@@ -103,7 +103,7 @@ async def get_generation(job_id: str) -> dict[str, Any]:
             "phrase_boundaries": ir.get("phrase_boundaries", []),
             "note_events": [
                 {key: note[key] for key in (
-                    "pitch", "start", "duration", "quantization_margin_cents",
+                    "pitch", "pitch_cents", "start", "duration", "quantization_margin_cents",
                 ) if key in note}
                 for note in ir.get("note_events", [])
             ],

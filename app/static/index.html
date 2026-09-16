@@ -337,7 +337,7 @@
     function renderMelodyDebug(melody) {
       const notes = melody?.note_events;
       if (!Array.isArray(notes) || !notes.length) return '';
-      const safeNotes = notes.map(note => ({pitch:Number(note.pitch),start:Number(note.start),duration:Number(note.duration),margin:Number(note.quantization_margin_cents)}))
+      const safeNotes = notes.map(note => ({pitch:Number(note.pitch),cents:Number(note.pitch_cents),start:Number(note.start),duration:Number(note.duration),margin:Number(note.quantization_margin_cents)}))
         .filter(note => Number.isInteger(note.pitch) && Number.isFinite(note.start) && Number.isFinite(note.duration) && note.duration > 0);
       if (!safeNotes.length) return '';
       const trace = (Array.isArray(melody.pitch_trace) ? melody.pitch_trace : [])
@@ -383,9 +383,10 @@
         const label = pitchName(note.pitch);
         const edge = Number.isFinite(note.margin) && note.margin < 15;
         const marginLabel = Number.isFinite(note.margin) ? `, ${note.margin.toFixed(1)} cents from semitone boundary` : '';
-        return `<g><title>${index+1}. ${label} (MIDI ${note.pitch}), ${note.start.toFixed(2)}s, ${note.duration.toFixed(2)}s${marginLabel}</title><rect class="bar${edge ? ' pitch-edge' : ''}" x="${xx}" y="${yy}" width="${ww}" height="${row-6}" rx="5"/><text class="pitch-label" x="${xx+ww/2}" y="${yy+row/2-1}" text-anchor="middle">${label}</text></g>`;
+        const centsLabel = Number.isFinite(note.cents) ? `, ${note.cents >= 0 ? '+' : ''}${note.cents.toFixed(1)}¢` : '';
+        return `<g><title>${index+1}. ${label} (MIDI ${note.pitch}${centsLabel}), ${note.start.toFixed(2)}s, ${note.duration.toFixed(2)}s${marginLabel}</title><rect class="bar${edge ? ' pitch-edge' : ''}" x="${xx}" y="${yy}" width="${ww}" height="${row-6}" rx="5"/><text class="pitch-label" x="${xx+ww/2}" y="${yy+row/2-1}" text-anchor="middle">${label}</text></g>`;
       }).join('');
-      const cells = safeNotes.map((note,index) => `<div class="note-cell"><b>${String(index+1).padStart(2,'0')}</b><strong>${pitchName(note.pitch)}</strong><small>${note.start.toFixed(2)}s · ${note.duration.toFixed(2)}s</small>${Number.isFinite(note.margin) && note.margin < 15 ? `<small class="pitch-margin">距半音取整边界 ${note.margin.toFixed(1)}¢</small>` : ''}</div>`).join('');
+      const cells = safeNotes.map((note,index) => `<div class="note-cell"><b>${String(index+1).padStart(2,'0')}</b><strong>${pitchName(note.pitch)}</strong><small>${Number.isFinite(note.cents) ? `${note.cents >= 0 ? '+' : ''}${note.cents.toFixed(1)}¢ · ` : ''}${note.start.toFixed(2)}s · ${note.duration.toFixed(2)}s</small>${Number.isFinite(note.margin) && note.margin < 15 ? `<small class="pitch-margin">距半音取整边界 ${note.margin.toFixed(1)}¢</small>` : ''}</div>`).join('');
       const phraseCount = (melody.phrase_boundaries || []).length + 1;
       const bpm = Number(melody.tempo_bpm);
       return `<details id="melody-debug" class="melody-debug"><summary>逐音旋律调试视图<span>${safeNotes.length} 音 · ${phraseCount} 句 · ${Number.isFinite(bpm) ? bpm.toFixed(2) : '—'} BPM</span></summary><div class="melody-body"><p class="melody-meta">横轴为录音时间，纵轴为 MIDI 音高；绿色色块是 MIDI 音符，蓝线是连续基频测量，虚线为乐句边界；橙边表示音高接近半音取整边界。</p><div class="melody-chart-scroll"><svg class="melody-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="连续音高测量与MIDI音符对照图">${grid.join('')}${timeGrid.join('')}${phrases}${bars}${traceSvg}</svg></div><div class="note-list">${cells}</div></div></details>`;
