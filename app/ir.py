@@ -15,6 +15,11 @@ def melody_to_midi(analysis: dict[str, Any]) -> tuple[bytes, dict[str, Any]]:
     track = mido.MidiTrack()
     midi.tracks.append(track)
     track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(bpm), time=0))
+    # Declare the pitch-wheel range instead of relying on a synth's default.
+    # This makes the fractional cents below render consistently in FluidSynth,
+    # browser players and DAWs (two semitones is the GM default range).
+    for control, value in ((101, 0), (100, 0), (6, 2), (38, 0), (101, 127), (100, 127)):
+        track.append(mido.Message("control_change", channel=0, control=control, value=value, time=0))
     if analysis.get("midi_key_signature"):
         track.append(mido.MetaMessage("key_signature", key=analysis["midi_key_signature"], time=0))
     events = []
