@@ -75,3 +75,5 @@
 - `pitch_tracking.py` 为每个事件保存 `pitch_cents`（稳定基频相对整数 MIDI 的音分偏移）；`ir.py` 在 note-on 前写入标准 MIDI pitchwheel（默认 GM ±2 半音范围），整数音符、起点及时值保持不变，回放可跟随真实演唱的细微音高。
 - 19 项既有单元测试通过；真实录音生成的 MIDI 往返仍为 14 个事件，新增 pitchwheel 不改变 `midi_summary` 的音符时间线。
 - pYIN/Praat 离线交叉实验未比当前 YIN 减少稳定音符错误，且首次 pYIN 编译耗时很高，因此不纳入线上路径。
+
+- 线上 `melody` 调试数据现额外返回 `pitch_cents`，页面音符详情显示音分偏移，便于现场确认“整数音名正确但播放仍偏”的情况。
