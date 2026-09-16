@@ -106,3 +106,5 @@
 - 对真实 `model-compare/audio_16k.wav` 的离线 A/B：A `[44,44,52,52,54,54,52,50,49,48,47,46,45,44]`；B `[44,44,51,51,53,53,51,49,49,48,48,46,46,44]`。B 保留所有起音/时值，修复半音漂移和下行滑音被误当成独立音高的问题。
 - 15 音另一段真实录音未触发规则，避免把同一启发式套到不同旋律。生产默认通过 `MELODY_INTENT_MODE=auto`，`measured` 可做严格基线，`intent` 可做强制 A/B；API job 会返回 `melody_intent` 诊断。
 - 30 项单元测试全部通过。该候选是可解释的实验，不代表所有哼唱都已解决；下一步要用手机对 A/B 试听，并在拿到腾讯/专业云转谱凭据后做第三方对照。
+- 批量离线回放仓库中的 67 份规范化真实录音：55 份同一 14 音重复对旋律触发高置信候选，12 份（包括所有 15 音样本）保持 measured；没有改变任何起音或时值。
+- 生产机真实 HTTP A/B job `3a4632f9ea1647b9ac0aaecffc8c1157` 已完成，API 返回 `melody_intent.mode=major-scale-repeated-pair`、`changed_notes=8`，canonical MIDI 为 `[44,44,51,51,53,53,51,49,49,48,48,46,46,44]`；Funk/Lofi 与 canonical melody 音频均由 FluidSynth 成功渲染。
