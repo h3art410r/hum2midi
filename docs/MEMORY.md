@@ -77,3 +77,5 @@
 - pYIN/Praat 离线交叉实验未比当前 YIN 减少稳定音符错误，且首次 pYIN 编译耗时很高，因此不纳入线上路径。
 
 - 线上 `melody` 调试数据现额外返回 `pitch_cents`，页面音符详情显示音分偏移，便于现场确认“整数音名正确但播放仍偏”的情况。
+
+- canonical MIDI 现在显式设置 GM Pitch Bend Range 为 ±2 半音（RPN 101/100/6/38），避免不同播放器对 `pitch_cents` 的解释不一致。
