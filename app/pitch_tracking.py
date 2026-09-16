@@ -88,6 +88,10 @@ def extract_hummed_notes(path: Path) -> dict[str, Any]:
             confidence = float(np.clip(f0_conf * np.exp(-spread / 1.5), 0.1, 0.98))
             notes.append({
                 "pitch": pitch,
+                # Keep the measured fractional semitone so the MIDI writer
+                # can add a fine pitch bend instead of throwing away up to
+                # 50 cents at integer quantization.
+                "pitch_cents": round(float((continuous_pitch - pitch) * 100), 1),
                 "quantization_margin_cents": round(
                     max(0.0, 0.5 - abs(continuous_pitch - pitch)) * 100, 1
                 ),

@@ -68,3 +68,10 @@
 - iPad/触摸设备此前被 `min-width:760px` 误套电脑端 16:9 固定高度，页面 `overflow:hidden` 导致下方“生成我的版本”按钮被裁掉。现在 16:9 只对 `min-width:1024px` 且支持 hover 的桌面调试视图启用，触摸设备使用自然高度和滚动页面。
 - 录音圆形按钮增加 iOS 长按保护：禁止选字、拖拽、系统 callout 和 gesturestart，避免长按复制页面文字。
 - 已部署并通过线上页面内容校验：`https://kr.sunyongfei.cn/`，健康检查正常。
+
+## 2026-09-17：音准细节保留实验
+
+- 真实录音当前 YIN、独立谐波频谱和 Basic Pitch 基准的整数音高基本一致；剩余听感偏差主要来自人声滑音及整数半音量化丢失的音分。Qwen Omni 直接逐音输出仍会生成固定重复音，不能作为精确替代。
+- `pitch_tracking.py` 为每个事件保存 `pitch_cents`（稳定基频相对整数 MIDI 的音分偏移）；`ir.py` 在 note-on 前写入标准 MIDI pitchwheel（默认 GM ±2 半音范围），整数音符、起点及时值保持不变，回放可跟随真实演唱的细微音高。
+- 19 项既有单元测试通过；真实录音生成的 MIDI 往返仍为 14 个事件，新增 pitchwheel 不改变 `midi_summary` 的音符时间线。
+- pYIN/Praat 离线交叉实验未比当前 YIN 减少稳定音符错误，且首次 pYIN 编译耗时很高，因此不纳入线上路径。

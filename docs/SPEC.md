@@ -26,7 +26,7 @@
 - 录音必须进入真实的云端理解流程；禁止预制音频、mock IR 或 mock 结果伪装成实时转换。
 - 首选候选为阿里云百炼 Qwen-Omni 音频理解 API。模型负责云端听音并确认整体旋律；精细音符边界与基频由确定性 YIN/能量检测测量。随后文本模型读取 canonical MIDI 并整体转换成风格 MIDI，不是把原旋律轨原样保留后再简单追加音轨。云端调用不可用或其音高走向与信号分析不一致时必须报错，禁止静默降级。
 - 音频使用 WAV/PCM 传入云 API，密钥与百炼 Workspace ID 仅放服务端环境变量。
-- MIDI 1.0 是 canonical 旋律文件；伴随的版本化 MelodyIR JSON 保留音高、起始秒数、时值、力度、置信度、速度和来源，并额外记录音高取整距相邻半音决策边界的余量。该诊断字段不改变 MIDI 音符序列。
+- MIDI 1.0 是 canonical 旋律文件；伴随的版本化 MelodyIR JSON 保留音高、起始秒数、时值、力度、置信度、速度和来源，并额外记录测得音高相对整数 MIDI 的音分偏移及距相邻半音决策边界的余量。导出 MIDI 时用标准 pitch bend 保留这部分细微音准，不改变整数音符语义。
 - 风格 MIDI 由文本模型一次性生成完整风格多轨，服务端只校验 JSON、音符范围、时值范围和轨道数量，不强制逐音复制 canonical MIDI；WAV 优先由 FluidSynth 加获许可的 SoundFont 渲染，未配置音源时回退到可解释的程序化合成器。渲染过程不加载本地 ML 模型，也不调用音频生成 API。
 - 后端使用 Python + FastAPI。任务状态留在进程内存；原始录音、MIDI 和 WAV 结果放在临时目录 `data/demo/`，不加入版本控制；刷新后不保证保留。
 - API：`POST /api/generations` 上传音频并创建任务；`GET /api/generations/{id}` 查询状态；`GET /api/generations/{id}/audio/{style}` 播放结果。

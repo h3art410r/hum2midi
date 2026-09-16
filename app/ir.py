@@ -23,17 +23,25 @@ def melody_to_midi(analysis: dict[str, Any]) -> tuple[bytes, dict[str, Any]]:
         end = start + max(0.04, float(note["duration"]))
         velocity = int(note.get("velocity", 88))
         pitch = int(note["pitch"])
-        events.append((round(start * midi.ticks_per_beat * bpm / 60), 1, pitch, velocity))
-        events.append((round(end * midi.ticks_per_beat * bpm / 60), 0, pitch, 0))
+        start_tick = round(start * midi.ticks_per_beat * bpm / 60)
+        end_tick = round(end * midi.ticks_per_beat * bpm / 60)
+        # Standard GM pitch-wheel range is ±2 semitones. A measured fractional
+        # pitch is emitted immediately before its note-on, preserving the
+        # integer MIDI note while making playback follow the singer's actual
+        # intonation. The melody is monophonic, so one channel is sufficient.
+        cents = max(-99.9, min(99.9, float(note.get("pitch_cents", 0.0))))
+        bend = int(round(cents / 200.0 * 8192))
+        events.append((start_tick, 0, "pitchwheel", pitch, bend))
+        events.append((start_tick, 1, "note_on", pitch, velocity))
+        events.append((end_tick, 2, "note_off", pitch, 0))
     events.sort(key=lambda event: (event[0], event[1]))
     previous_tick = 0
-    for tick, is_on, pitch, velocity in events:
-        track.append(mido.Message(
-            "note_on" if is_on else "note_off",
-            note=pitch,
-            velocity=velocity,
-            time=max(0, tick - previous_tick),
-        ))
+    for tick, _order, message_type, pitch, value in events:
+        if message_type == "pitchwheel":
+            message = mido.Message("pitchwheel", pitch=value, time=max(0, tick - previous_tick))
+        else:
+            message = mido.Message(message_type, note=pitch, velocity=value, time=max(0, tick - previous_tick))
+        track.append(message)
         previous_tick = tick
     track.append(mido.MetaMessage("end_of_track", time=0))
     stream = io.BytesIO()
@@ -48,7 +56,7 @@ def melody_to_midi(analysis: dict[str, Any]) -> tuple[bytes, dict[str, Any]]:
     ir["note_events"] = [
         {key: note[key] for key in (
             "pitch", "start", "duration", "velocity", "confidence",
-            "quantization_margin_cents",
+            "pitch_cents", "quantization_margin_cents",
         ) if key in note}
         for note in sorted(analysis["notes"], key=lambda item: item["start"])
     ]
