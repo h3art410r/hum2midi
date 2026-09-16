@@ -21,7 +21,11 @@ from app.ir import melody_to_midi
 from app.midi_style import MidiStyleError, QwenMidiStyleClient, arrangement_to_midi
 from app.pitch_tracking import PitchTrackingError
 from app.audio_renderer import render_audio, renderer_status
-from app.transcription import CloudTranscriptionError, resolve_transcription_engine
+from app.transcription import (
+    CloudTranscriptionError,
+    configured_transcription_engine_name,
+    resolve_transcription_engine,
+)
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent
@@ -50,7 +54,7 @@ async def health() -> dict[str, str]:
         "audio_understanding": "qwen-omni-cloud",
         "renderer": renderer_status(),
         "midi_style_model": os.getenv("QWEN_TEXT_MODEL", "qwen-flash"),
-        "transcription_engine": os.getenv("TRANSCRIPTION_ENGINE", "dsp").strip().lower(),
+        "transcription_engine": configured_transcription_engine_name(),
     }
 
 

@@ -74,6 +74,16 @@ def resolve_transcription_engine() -> TranscriptionEngine:
     return DspTranscriptionEngine()
 
 
+def configured_transcription_engine_name() -> str:
+    """Return the effective engine name for health/debug output."""
+    configured = os.getenv("TRANSCRIPTION_ENGINE", "dsp").strip().lower()
+    if configured in {"klangio", "auto"} and os.getenv("KLANGIO_API_KEY", "").strip():
+        return KlangioTranscriptionEngine.name
+    if configured in {"dsp", "auto"}:
+        return DspTranscriptionEngine.name
+    return f"invalid:{configured or 'empty'}"
+
+
 async def transcribe_with_klangio(audio_path: Path) -> dict[str, Any]:
     """Transcribe a monophonic vocal take through Klangio's vocal model."""
     api_key = os.getenv("KLANGIO_API_KEY", "").strip()
