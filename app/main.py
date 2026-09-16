@@ -19,9 +19,9 @@ from fastapi.staticfiles import StaticFiles
 from app.audio_understanding import AudioUnderstandingError, QwenOmniClient
 from app.ir import melody_to_midi
 from app.midi_style import MidiStyleError, QwenMidiStyleClient, arrangement_to_midi
-from app.pitch_tracking import PitchTrackingError, extract_hummed_notes
+from app.pitch_tracking import PitchTrackingError
 from app.audio_renderer import render_audio, renderer_status
-from app.transcription import CloudTranscriptionError, transcribe_with_klangio
+from app.transcription import CloudTranscriptionError, resolve_transcription_engine
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent
@@ -141,16 +141,24 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
         job["status"] = "understanding"
         job["message"] = "云端正在理解哼唱，并准备旋律 MIDI…"
         contour = await audio_client.analyze_pitch_contour(audio_path)
-        engine = os.getenv("TRANSCRIPTION_ENGINE", "dsp").strip().lower()
-        if engine in {"klangio", "auto"} and os.getenv("KLANGIO_API_KEY", "").strip():
-            job["message"] = "云端 Vocal 转谱模型正在提取精确 MIDI…"
-            analysis = await transcribe_with_klangio(audio_path)
-        elif engine == "klangio":
-            raise CloudTranscriptionError("已选择 Klangio Vocal 转谱，但服务端未配置 KLANGIO_API_KEY。")
-        else:
-            analysis = extract_hummed_notes(audio_path)
+        job["cloud_pitch_contour"] = contour
+        transcription = resolve_transcription_engine()
+        job["transcription_engine"] = transcription.name
+        job["message"] = f"{transcription.name} 正在提取旋律 MIDI…"
+        analysis = await transcription.transcribe(audio_path)
         if analysis["pitch_contour"] != contour:
-            raise AudioUnderstandingError("云端听到的旋律走向与录音分析不一致，请重录后重试。")
+            # Keep both observations for review instead of turning a coarse
+            # multimodal disagreement into a false hard failure. The cloud
+            # call remains mandatory and its result is visible in the job;
+            # the selected transcription engine owns the note-level output.
+            job["validation_warning"] = (
+                f"云端走向={contour}，转谱引擎走向={analysis['pitch_contour']}；"
+                "已保留两者并继续生成，请人工复核。"
+            )
+            logger.warning(
+                "pitch_contour_mismatch job=%s cloud=%s engine=%s",
+                job_id, contour, analysis["pitch_contour"],
+            )
         midi_data, ir = melody_to_midi(analysis)
         job["ir"] = ir
         job["pitch_trace"] = analysis.get("pitch_trace", [])

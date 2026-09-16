@@ -10,8 +10,9 @@ from __future__ import annotations
 import asyncio
 import io
 import os
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
 import mido
@@ -21,6 +22,56 @@ from app.pitch_tracking import _classify_contour
 
 class CloudTranscriptionError(RuntimeError):
     pass
+
+
+class TranscriptionEngine(Protocol):
+    """Small provider boundary for the reviewable transcription pipeline."""
+
+    name: str
+
+    async def transcribe(self, audio_path: Path) -> dict[str, Any]:
+        ...
+
+
+@dataclass(frozen=True)
+class DspTranscriptionEngine:
+    """Deterministic baseline used for local measurements and regression tests."""
+
+    name: str = "dsp-yin"
+
+    async def transcribe(self, audio_path: Path) -> dict[str, Any]:
+        # Import lazily so the provider boundary remains independent of the
+        # application module and cloud adapters.
+        from app.pitch_tracking import extract_hummed_notes
+
+        return extract_hummed_notes(audio_path)
+
+
+@dataclass(frozen=True)
+class KlangioTranscriptionEngine:
+    """Cloud vocal transcription provider, selected explicitly at runtime."""
+
+    name: str = "klangio-vocal-cloud"
+
+    async def transcribe(self, audio_path: Path) -> dict[str, Any]:
+        return await transcribe_with_klangio(audio_path)
+
+
+def resolve_transcription_engine() -> TranscriptionEngine:
+    """Resolve one engine without silently falling back after a cloud failure.
+
+    ``auto`` only chooses Klangio when a key is present; once selected, a
+    provider error remains visible to the caller. This prevents an A/B run
+    from looking successful because it quietly switched engines.
+    """
+    configured = os.getenv("TRANSCRIPTION_ENGINE", "dsp").strip().lower()
+    if configured in {"klangio", "auto"} and os.getenv("KLANGIO_API_KEY", "").strip():
+        return KlangioTranscriptionEngine()
+    if configured == "klangio":
+        raise CloudTranscriptionError("已选择 Klangio Vocal 转谱，但服务端未配置 KLANGIO_API_KEY。")
+    if configured not in {"dsp", "auto"}:
+        raise CloudTranscriptionError(f"未知 TRANSCRIPTION_ENGINE：{configured}")
+    return DspTranscriptionEngine()
 
 
 async def transcribe_with_klangio(audio_path: Path) -> dict[str, Any]:
@@ -39,7 +90,7 @@ async def transcribe_with_klangio(audio_path: Path) -> dict[str, Any]:
                     f"{base_url}/transcription",
                     headers=headers,
                     params={"model": model},
-                    data={"outputs": "midi"},
+                    data=[("outputs", "midi")],
                     files={"file": (audio_path.name, handle, "audio/wav")},
                 )
             if response.is_error:

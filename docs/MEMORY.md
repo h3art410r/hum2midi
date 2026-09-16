@@ -84,3 +84,10 @@
 
 - 生产机最近三份真实录音均在结尾出现同音短片段（约 0.21–0.26 秒）被误切成额外音符，导致 15 音。新增保守合并：相邻同 MIDI 音、间隔接近零且一段小于 0.30 秒时合并。三份输入均稳定为 14 音；20 项测试通过，快速重复音符测试未被合并。
 - 修复已部署至 `kr.sunyongfei.cn`，生产机直接重跑三份现有 `audio_16k.wav` 均得到 14 音，健康检查正常。
+
+## 2026-09-17：转谱 review 重构与多模态 A/B
+
+- 不再在 `main.py` 里分支堆叠 provider；`app/transcription.py` 现在定义 `TranscriptionEngine` 协议，并提供 `DspTranscriptionEngine` 与可选 `KlangioTranscriptionEngine`。`TRANSCRIPTION_ENGINE=auto` 仅在配置 `KLANGIO_API_KEY` 时选择云端，云端错误不会静默 fallback。
+- Qwen Omni 的两种窄任务实验（完整 MIDI JSON、±1 半音候选选择）都未达到逐音可靠性；实验脚本保留在 `docs/probe_multimodal_note_ranking.py`，结果写入 `docs/MODEL_REVIEW.md`，没有污染生产路径。
+- YIN、Basic Pitch、pYIN、Praat 的交叉结果支持当前整数音高轮廓；剩余误差主要是人声滑音/音分和“实际哼唱”与“标准曲谱”的目标差异。
+- 新增 Klangio Vocal→MIDI provider adapter，采用官方异步转录任务和 MIDI 下载接口。没有配置密钥时不宣称效果通过；下一次应在同一原始 WAV 上做 DSP vs Klangio 的盲测，记录准确率、延迟、费用和失败率。

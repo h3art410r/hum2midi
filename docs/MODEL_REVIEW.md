@@ -189,3 +189,24 @@
 演奏层与动态实验现场复测（2026-09-16）：真实 M4A 新 job `47401e1804974ddfae21b59d0b64c0b9` 完成，canonical MIDI 仍为 14 音、102.56 BPM，Funk/Lofi 风格 MIDI 分别为 106/48 音符；两个 WAV HTTP 200，API `renderers` 明确报告均为 `fluidsynth-soundfont`。新增 CC7/10/91/93、固定 seed 微时差/力度和总线能量弧线后，音频峰值均归一到 0.82。该轮证明新演奏层已进入真实端到端链路，主观“惊艳度”仍需手机盲听。
 
 响度修复（2026-09-16）：线上 SoundFont WAV 的原始平均电平约 -18.7/-16.8 dB，峰值 -1.7 dBFS；确认是动态范围偏大。新增轻度总线压缩与补偿增益，峰值目标 -0.7 dBFS。生产机已重启并重渲染 `fe96c26e463d472c857ddf76c69a8398`，Funk/Lofi 平均电平升至 -16.7/-15.8 dB，音频接口仍为 200。
+
+## 发散式转谱评审（2026-09-17）
+
+这次按 review 重构了转谱边界：`app/transcription.py` 定义了小型 `TranscriptionEngine` 协议，当前有可重复的 `dsp-yin` 基线和可选的云端 `klangio-vocal-cloud` 实现。主流程通过 `TRANSCRIPTION_ENGINE` 选择引擎；`auto` 只有在检测到 `KLANGIO_API_KEY` 时才选择 Klangio，云端失败会直接暴露，不会偷偷切回 DSP。这样一次 A/B 的结果可以归因到实际模型，而不是被隐式 fallback 污染。
+
+针对“通用多模态是否能替代专业转谱”的问题，做了四组真实录音实验：
+
+| 路线 | 模型/方法 | 结果 | 结论 |
+| --- | --- | --- | --- |
+| A | Qwen Omni 直接输出完整 MIDI JSON | 音符数有时接近，但出现固定重复音、等间隔时值 | 不能作为逐音转谱引擎 |
+| B | Qwen Omni 只在相邻 ±1 半音候选中选择 | `docs/probe_multimodal_note_ranking.py` 的随机候选仍有位置/极值偏置，多个音未选中真实音高 | 音频理解能力存在，但不适合当音高判别器 |
+| C | YIN、Basic Pitch、pYIN、Praat 交叉测量 | 四条路线的整数音高轮廓基本一致；pYIN/Praat 没有减少这段录音的错误，且 pYIN 首次编译很慢 | 当前 DSP 结果有独立交叉证据，剩余误差主要是人声滑音和半音量化 |
+| D | Klangio `vocal` 云端专用转谱模型 | 已完成 provider adapter，尚未配置该服务密钥，不能把“未实测”写成通过 | 这是下一项真正有区分度的云端 A/B |
+
+Klangio 的官方 API 明确提供 Vocal 转谱模型、MIDI 输出和异步任务流程：[API 总览](https://api-docs.klang.io/)、[基础任务流程](https://api-docs.klang.io/docs/getting-started/basic-job-workflow)、[转录模型选择](https://api-docs.klang.io/docs/advanced-usage/transcription-model-selection)。它是面向音乐转谱的服务，和 Qwen Omni 的通用音频理解定位不同；是否更准必须用同一份录音实测后再决定。
+
+当前已做的音准保真处理是：IR 保存 `pitch_cents`，标准 MIDI 写入 ±2 半音 Pitch Bend，并合并尾部同音短碎片；这些处理改善了“整数音名相同但播放偏”的情况，却不能把一段离调哼唱自动纠正成用户脑中的标准曲谱。若验收标准是“还原用户实际唱的音高”，当前 DSP 基线已经有稳定证据；若标准是“猜出用户想唱的标准旋律”，需要提供参考音频/调性或使用专门的云端转谱模型，不能靠继续堆通用 Prompt 保证。
+
+这轮结论不是“问题已经解决”：Qwen Omni 仍保留为整体理解/盲听评测工具，未进入逐音生产路径；Klangio adapter 也未在没有密钥时启用。下一次 A/B 应使用同一原始 WAV，同时记录音符起止误差、整数音高准确率、音分误差、处理时延和费用，再决定是否替换 DSP 基线。
+
+本次重构还移除了“粗略走向不一致就直接失败”的硬门槛：Qwen 的走向判断仍然必做并写入 job，转谱引擎的走向也单独保留；两者不一致时记录 `validation_warning`，继续产出并把冲突交给人工复核。这样通用多模态模型至少能提供可见的独立证据，不会因为一次粗粒度分类抖动而阻断真正的转谱 A/B。

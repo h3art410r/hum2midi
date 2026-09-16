@@ -3,7 +3,9 @@
 This is an experiment, not part of the production path. It tests a narrower
 use of audio understanding than asking a general model to emit an entire MIDI:
 the DSP tracker proposes p-1/p/p+1, and the model only selects the candidate
-whose pitch matches the source clip.
+whose pitch matches the source clip. Candidate order is randomized and each
+note is repeated so position bias can be measured instead of mistaken for
+pitch understanding.
 """
 from __future__ import annotations
 
@@ -13,6 +15,7 @@ import base64
 import io
 import json
 import os
+import random
 import sys
 import wave
 from pathlib import Path
@@ -96,14 +99,39 @@ async def main(args: argparse.Namespace) -> None:
         samples = np.frombuffer(source.readframes(source.getnframes()), dtype="<i2").astype(np.float64) / 32768
     notes = extract_hummed_notes(args.audio)["notes"]
     indices = [int(item) for item in args.notes.split(",") if item.strip()]
+    rng = random.Random(args.seed)
     rows = []
     async with httpx.AsyncClient(timeout=120) as client:
         for index in indices:
             note = notes[index]
             base = int(note["pitch"])
-            candidates = [base - 1, base, base + 1]
-            answer = await ask(client, endpoint, key, model, build_probe(samples, note, candidates, base))
-            rows.append({"index": index, "source_pitch": base, "candidates": candidates, "answer": answer})
+            canonical = [base - 1, base, base + 1]
+            trials = []
+            for repeat in range(max(1, args.repeats)):
+                candidates = canonical[:]
+                rng.shuffle(candidates)
+                answer = await ask(client, endpoint, key, model, build_probe(samples, note, candidates, base))
+                labels = {"A": 0, "B": 1, "C": 2}
+                selected = None
+                label = answer[:1].upper()
+                if label in labels and labels[label] < len(candidates):
+                    selected = candidates[labels[label]]
+                trials.append({
+                    "repeat": repeat + 1,
+                    "candidates": candidates,
+                    "answer": answer,
+                    "selected_pitch": selected,
+                    "correct": selected == base,
+                })
+            votes = [trial["selected_pitch"] for trial in trials if trial["selected_pitch"] is not None]
+            consensus = max(set(votes), key=votes.count) if votes else None
+            rows.append({
+                "index": index,
+                "source_pitch": base,
+                "trials": trials,
+                "consensus_pitch": consensus,
+                "consensus_correct": consensus == base,
+            })
     print(json.dumps(rows, ensure_ascii=False, indent=2))
 
 
@@ -111,5 +139,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("audio", type=Path)
     parser.add_argument("--notes", default="2,4,8,10")
+    parser.add_argument("--repeats", type=int, default=3, help="每个音符随机候选顺序的重复次数")
+    parser.add_argument("--seed", type=int, default=7, help="候选顺序随机种子")
     parser.add_argument("--env", type=Path, default=Path(".env"))
     asyncio.run(main(parser.parse_args()))
