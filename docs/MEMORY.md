@@ -62,3 +62,9 @@
 - `app/static/index.html` 的原始试听通过 Web Audio 2.4x makeup gain 与软压缩播放，保留原始上传字节；不依赖把 HTML audio 的 `volume` 设到超过 1。
 - `app/audio_renderer.py` 增加 RMS 复测、软限幅和两轮有效段增益，避免 Lofi 因高峰均比被单纯峰值归一化压回低音量。线上重渲染 job `09d79eef1be2448b8645ce58d3f13bd4`：Funk 平均 `-12.4 dB`、峰值 `-1.7 dBFS`；Lofi 平均 `-13.7 dB`、峰值 `-0.7 dBFS`。
 - 本轮 `.venv\Scripts\python.exe -m unittest discover -s tests -q`：19 项通过。
+
+## 2026-09-16：平板页面可用性修复
+
+- iPad/触摸设备此前被 `min-width:760px` 误套电脑端 16:9 固定高度，页面 `overflow:hidden` 导致下方“生成我的版本”按钮被裁掉。现在 16:9 只对 `min-width:1024px` 且支持 hover 的桌面调试视图启用，触摸设备使用自然高度和滚动页面。
+- 录音圆形按钮增加 iOS 长按保护：禁止选字、拖拽、系统 callout 和 gesturestart，避免长按复制页面文字。
+- 已部署并通过线上页面内容校验：`https://kr.sunyongfei.cn/`，健康检查正常。
