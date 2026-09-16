@@ -1,11 +1,15 @@
 import os
+import io
 import unittest
 from unittest.mock import patch
+
+import mido
 
 from app.transcription import (
     CloudTranscriptionError,
     DspTranscriptionEngine,
     KlangioTranscriptionEngine,
+    _midi_to_analysis,
     resolve_transcription_engine,
 )
 
@@ -31,6 +35,22 @@ class TranscriptionBoundaryTests(unittest.TestCase):
         with patch.dict(os.environ, {"TRANSCRIPTION_ENGINE": "made-up", "KLANGIO_API_KEY": ""}, clear=False):
             with self.assertRaises(CloudTranscriptionError):
                 resolve_transcription_engine()
+
+    def test_provider_midi_parser_returns_monophonic_analysis(self):
+        midi = mido.MidiFile(ticks_per_beat=480)
+        track = mido.MidiTrack()
+        midi.tracks.append(track)
+        track.append(mido.MetaMessage("set_tempo", tempo=600000, time=0))
+        track.append(mido.Message("note_on", note=60, velocity=80, time=0))
+        track.append(mido.Message("note_off", note=60, velocity=0, time=480))
+        track.append(mido.Message("note_on", note=62, velocity=80, time=0))
+        track.append(mido.Message("note_off", note=62, velocity=0, time=480))
+        stream = io.BytesIO()
+        midi.save(file=stream)
+        result = _midi_to_analysis(stream.getvalue())
+        self.assertEqual([note["pitch"] for note in result["notes"]], [60, 62])
+        self.assertAlmostEqual(result["tempo_bpm"], 100.0)
+        self.assertEqual(result["source"], "klangio-vocal-cloud")
 
 
 if __name__ == "__main__":
