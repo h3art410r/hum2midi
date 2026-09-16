@@ -92,3 +92,4 @@
 - YIN、Basic Pitch、pYIN、Praat 的交叉结果支持当前整数音高轮廓；剩余误差主要是人声滑音/音分和“实际哼唱”与“标准曲谱”的目标差异。
 - 新增 Klangio Vocal→MIDI provider adapter，采用官方异步转录任务和 MIDI 下载接口。没有配置密钥时不宣称效果通过；下一次应在同一原始 WAV 上做 DSP vs Klangio 的盲测，记录准确率、延迟、费用和失败率。
 - review 重构已提交为 `5588099` 并同步到 `kr.sunyongfei.cn`。线上健康检查正常；真实原始 M4A 新 job `1c1ef1b50322406abe3e6087f2516d90` 完成，14 音、102.56 BPM、Funk/Lofi 音频均由 FluidSynth SoundFont 返回 200。该 job 同时记录了 `cloud_pitch_contour` 和实际 `transcription_engine=dsp-yin`，便于后续对照。
+- 随机候选 A/B 复测：同一真实 WAV 的 3 个音符、每个 2 次、候选顺序随机，Qwen Omni 命中率 `0/6`；回答标签随音符固定为 A/C，映射到的实际音高随顺序变化。该证据支持停止把通用 Omni 当逐音音高判别器。
