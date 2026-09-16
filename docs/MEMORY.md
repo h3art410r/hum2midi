@@ -97,3 +97,4 @@
 - 调研并接入腾讯多媒体实验室 `vocalMidi` provider：官方能力是人声转录、计算音高和区间并输出 MIDI/JSON。由于腾讯任务只接受可访问 URL，应用新增随机 job id 的临时规范化 WAV 路由；启用前需要 `TENCENT_SECRET_ID`、`TENCENT_SECRET_KEY`、`H2M_PUBLIC_BASE_URL`，没有凭据不宣称效果。
 - 线上新增 `melody.wav` canonical MIDI 试听路由和页面卡片；job `64595c59ed27486687168b6c65a54904` 实测 `renderers.melody=fluidsynth-soundfont`，可直接与原始录音及两种风格音频盲听对照。
 - Basic Pitch 参数扫描结果：默认参数 23 个碎音；提高 onset/frame 阈值虽能得到 14–15 个音，但会吞重复音或错配起音，不能稳定优于 DSP 基线，未进入生产。
+- 调性候选 A/B：以结尾音推断大调、将半音边界音映射到级内音，保留原人声音质感和节奏；Qwen Omni 4 次随机复测选 `dsp` 2 次、`smoothed` 1 次、`diatonic` 1 次，结果不稳定，未自动应用。

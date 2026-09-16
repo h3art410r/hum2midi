@@ -105,6 +105,24 @@ def motif_candidate(pitches: list[int]) -> list[int]:
     return first + [second_root + interval for interval in intervals]
 
 
+def diatonic_candidate(pitches: list[int]) -> list[int]:
+    """Soft musical-intent candidate: nearest notes in a major scale.
+
+    The tonic is inferred from the final note; no song title or fixed score is
+    supplied. This is intentionally an experiment because a genuinely
+    chromatic melody should remain unchanged.
+    """
+    if not pitches:
+        return []
+    root = pitches[-1] % 12
+    scale = {(root + offset) % 12 for offset in (0, 2, 4, 5, 7, 9, 11)}
+    result = []
+    for pitch in pitches:
+        choices = [candidate for candidate in range(pitch - 2, pitch + 3) if candidate % 12 in scale]
+        result.append(min(choices, key=lambda candidate: abs(candidate - pitch)))
+    return result
+
+
 async def main(args: argparse.Namespace) -> None:
     load_dotenv(args.env)
     key = os.getenv("DASHSCOPE_API_KEY", "").strip()
@@ -116,23 +134,27 @@ async def main(args: argparse.Namespace) -> None:
     notes = extract_hummed_notes(args.audio)["notes"]
     measured = [int(note["pitch"]) for note in notes]
     motif = motif_candidate(measured)
+    diatonic = diatonic_candidate(measured)
     # A deliberately different, smoothed contour is a negative control. None
     # of these candidates uses a song title or a reference score.
     smoothed = measured[:]
     for index in range(1, len(smoothed) - 1):
         smoothed[index] = int(round((smoothed[index - 1] + smoothed[index] + smoothed[index + 1]) / 3))
-    canonical = [("dsp", measured), ("motif", motif), ("smoothed", smoothed)]
+    canonical = [("dsp", measured), ("diatonic", diatonic), ("motif", motif), ("smoothed", smoothed)]
     rng = random.Random(args.seed)
     rows = []
     async with httpx.AsyncClient(timeout=120) as client:
         for repeat in range(max(1, args.repeats)):
             order = canonical[:]
             rng.shuffle(order)
+            # The prompt names exactly three candidates; use the first three
+            # in a shuffled four-way pool as a compact randomized control.
+            order = order[:3]
             answer = await ask(client, endpoint, key, model, build_bundle(source, notes, order))
             index = {"A": 0, "B": 1, "C": 2}.get(answer[:1].upper())
             selected = order[index][0] if index is not None and index < len(order) else None
             rows.append({"repeat": repeat + 1, "order": [name for name, _ in order], "answer": answer, "selected": selected})
-    print(json.dumps({"measured": measured, "motif": motif, "rows": rows}, ensure_ascii=False, indent=2))
+    print(json.dumps({"measured": measured, "diatonic": diatonic, "motif": motif, "rows": rows}, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
