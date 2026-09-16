@@ -20,6 +20,7 @@ from app.audio_understanding import AudioUnderstandingError, QwenOmniClient
 from app.ir import melody_to_midi
 from app.midi_style import MidiStyleError, QwenMidiStyleClient, arrangement_to_midi
 from app.pitch_tracking import PitchTrackingError
+from app.melody_intent import apply_melody_intent
 from app.audio_renderer import render_audio, renderer_status
 from app.transcription import (
     CloudTranscriptionError,
@@ -55,6 +56,7 @@ async def health() -> dict[str, str]:
         "renderer": renderer_status(),
         "midi_style_model": os.getenv("QWEN_TEXT_MODEL", "qwen-flash"),
         "transcription_engine": configured_transcription_engine_name(),
+        "melody_intent_mode": os.getenv("MELODY_INTENT_MODE", "auto"),
     }
 
 
@@ -167,6 +169,21 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
         public_base = os.getenv("H2M_PUBLIC_BASE_URL", "").strip().rstrip("/")
         public_url = f"{public_base}/api/generations/{job_id}/source" if public_base else None
         analysis = await transcription.transcribe(audio_path, public_url=public_url)
+        # Keep acoustic measurement and musical-intent correction as explicit
+        # stages.  ``auto`` only changes a high-confidence repeated-pair
+        # phrase; ``measured`` remains available for a strict A/B baseline.
+        measured_notes = analysis.get("notes", [])
+        intent_mode = os.getenv("MELODY_INTENT_MODE", "auto")
+        selected_notes, intent = apply_melody_intent(measured_notes, intent_mode)
+        analysis["notes"] = selected_notes
+        analysis["melody_intent"] = intent
+        if intent.get("changed_notes"):
+            analysis["source"] = f"{analysis.get('source', transcription.name)}+{intent.get('mode', 'intent')}"
+        job["melody_intent"] = intent
+        logger.info(
+            "melody_intent job=%s mode=%s changed_notes=%s confidence=%.3f",
+            job_id, intent.get("mode"), intent.get("changed_notes", 0), float(intent.get("confidence", 0)),
+        )
         if analysis["pitch_contour"] != contour:
             # Keep both observations for review instead of turning a coarse
             # multimodal disagreement into a false hard failure. The cloud
