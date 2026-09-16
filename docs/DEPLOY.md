@@ -12,6 +12,19 @@
 - 音频组件：系统 FFmpeg、FluidSynth 2.3.4、`fluid-soundfont-gm`
 - API 密钥只存在服务器 `.env`（权限 `600`），没有进入 Git 或日志
 
+## 可选：腾讯云人声转录 A/B
+
+腾讯智能音乐的人声转录任务要求服务端提交一个可访问的 HTTPS 音频 URL。启用前在服务器 `.env` 增加以下运行时配置（不要提交到仓库）：
+
+```bash
+TRANSCRIPTION_ENGINE=tencent
+TENCENT_SECRET_ID=...
+TENCENT_SECRET_KEY=...
+H2M_PUBLIC_BASE_URL=https://kr.sunyongfei.cn
+```
+
+应用会把规范化后的临时 WAV 暴露在随机 job id 路由，任务完成后再由 provider 下载 MIDI。若只想保留当前基线，使用 `TRANSCRIPTION_ENGINE=dsp`；`auto` 会在检测到腾讯凭据时优先选择腾讯，否则使用 DSP。云端任务失败不会静默切换引擎。
+
 ## 验收
 
 ```bash
