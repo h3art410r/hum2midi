@@ -18,7 +18,7 @@
     h1 { margin:14px 0 12px; font-size:clamp(38px,8vw,76px); line-height:.98; letter-spacing:-.065em; }
     .intro { max-width:510px; margin:0 auto; color:var(--muted); line-height:1.65; font-size:16px; }
     .record-wrap { margin:34px auto 18px; display:grid; justify-items:center; gap:13px; }
-    #record { border:0; width:148px; height:148px; border-radius:50%; background:var(--green); color:var(--ink); box-shadow:0 12px 36px #9cb84555; font-weight:800; cursor:pointer; touch-action:none; user-select:none; transition:transform .15s,background .15s; }
+    #record { border:0; width:148px; height:148px; border-radius:50%; background:var(--green); color:var(--ink); box-shadow:0 12px 36px #9cb84555; font-weight:800; cursor:pointer; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; transition:transform .15s,background .15s; }
     #record:active,#record.recording { transform:scale(.96); background:#b6ef2c; }
     #record .mic { display:block; font-size:36px; margin-bottom:5px; }
     #timer { min-height:24px; font-variant-numeric:tabular-nums; color:var(--muted); }
@@ -59,8 +59,12 @@
     .note-cell .pitch-margin { flex:0 0 100%; margin-left:0!important; color:#bd5f31; font-weight:650; }
     .hidden { display:none!important; }
     footer { display:flex; justify-content:space-between; color:#8b918c; font-size:11px; }
-    @media (min-width:760px) { .stage { aspect-ratio:16/9; min-height:0; height:min(100vh,720px); } }
-    @media (min-width:760px) { .stage.expanded { aspect-ratio:auto; min-height:100vh; height:auto; align-self:start; } }
+    /* The 16:9 fixed-height canvas is for mouse/keyboard desktop debugging.
+       Tablets are touch devices and need a naturally scrolling document so
+       the file picker and generate button are never clipped below the fold. */
+    @media (min-width:1024px) and (hover:hover) { .stage { aspect-ratio:16/9; min-height:0; height:min(100vh,720px); } }
+    @media (min-width:1024px) and (hover:hover) { .stage.expanded { aspect-ratio:auto; min-height:100vh; height:auto; align-self:start; } }
+    @media (hover:none) { body { display:block; background:var(--paper); } .stage { width:100%; min-height:100vh; height:auto; overflow:visible; aspect-ratio:auto; } main { padding:42px 0 56px; } footer { margin-top:auto; } }
     @media (max-width:520px) { body { background:var(--paper); } .stage { padding:24px 22px max(24px,env(safe-area-inset-bottom)); } header { align-items:flex-start; } .tag { max-width:130px; text-align:center; } main { padding:46px 0; } #record { width:136px;height:136px; } #results { grid-template-columns:1fr; } footer { margin-top:auto; } }
     @media (max-width:760px) { .note-list { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   </style>
@@ -281,7 +285,9 @@
     log('EVENTS_BOUND', 'file and action listeners registered');
     recordButton.addEventListener('pointerdown', event => { event.preventDefault(); try { recordButton.setPointerCapture(event.pointerId); } catch (_) {} begin(); });
     for (const eventName of ['pointerup','pointercancel','lostpointercapture']) recordButton.addEventListener(eventName, stopRecording);
-    recordButton.addEventListener('contextmenu', event => event.preventDefault());
+    for (const eventName of ['contextmenu','selectstart','dragstart','gesturestart']) {
+      recordButton.addEventListener(eventName, event => event.preventDefault());
+    }
     redo.addEventListener('click', () => { preview.classList.add('hidden'); redo.classList.add('hidden'); make.classList.add('hidden'); results.classList.add('hidden'); timer.textContent='00:00'; setStatus('按住按钮重新哼唱。'); });
     make.addEventListener('click', async () => {
       log('GENERATE_CLICK', `blob=${!!blob}`, blob ? `${blob.size} bytes ${blob.type}` : 'none');
