@@ -98,3 +98,4 @@
 - 线上新增 `melody.wav` canonical MIDI 试听路由和页面卡片；job `64595c59ed27486687168b6c65a54904` 实测 `renderers.melody=fluidsynth-soundfont`，可直接与原始录音及两种风格音频盲听对照。
 - Basic Pitch 参数扫描结果：默认参数 23 个碎音；提高 onset/frame 阈值虽能得到 14–15 个音，但会吞重复音或错配起音，不能稳定优于 DSP 基线，未进入生产。
 - 调性候选 A/B：以结尾音推断大调、将半音边界音映射到级内音，保留原人声音质感和节奏；Qwen Omni 4 次随机复测选 `dsp` 2 次、`smoothed` 1 次、`diatonic` 1 次，结果不稳定，未自动应用。
+- Omni 相邻半音间隔实验：Plus/Flash 都能数到 14 音两句，但同一 Prompt 给出不同且错误的间隔序列，故不进入逐音校正链路。
