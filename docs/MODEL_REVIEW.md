@@ -187,3 +187,5 @@
 本机已下载并实测 `GeneralUser-GS.sf2`：对 `e6651b913a304e30b3c4cf82d59cc19d` 的 Funk MIDI 直接渲染成功，FluidSynth 输出有效 WAV；服务健康检查现在报告 `fluidsynth-soundfont`。音源和 FluidSynth 二进制均放在被忽略的 `data/` 目录，不进入仓库提交。安装和许可证注意事项见 [`docs/SOUNDFONT.md`](SOUNDFONT.md)。
 
 演奏层与动态实验现场复测（2026-09-16）：真实 M4A 新 job `47401e1804974ddfae21b59d0b64c0b9` 完成，canonical MIDI 仍为 14 音、102.56 BPM，Funk/Lofi 风格 MIDI 分别为 106/48 音符；两个 WAV HTTP 200，API `renderers` 明确报告均为 `fluidsynth-soundfont`。新增 CC7/10/91/93、固定 seed 微时差/力度和总线能量弧线后，音频峰值均归一到 0.82。该轮证明新演奏层已进入真实端到端链路，主观“惊艳度”仍需手机盲听。
+
+响度修复（2026-09-16）：线上 SoundFont WAV 的原始平均电平约 -18.7/-16.8 dB，峰值 -1.7 dBFS；确认是动态范围偏大。新增轻度总线压缩与补偿增益，峰值目标 -0.7 dBFS。生产机已重启并重渲染 `fe96c26e463d472c857ddf76c69a8398`，Funk/Lofi 平均电平升至 -16.7/-15.8 dB，音频接口仍为 200。

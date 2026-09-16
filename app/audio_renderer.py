@@ -183,9 +183,24 @@ def _master_soundfont_wav(source: Path, output: Path, style: str) -> None:
             section_gain = 1.0
         values[index] = sample * section_gain
 
+    # Phone speakers benefit from a small amount of bus compression.  The
+    # SoundFont's acoustic attacks remain audible, while quiet accompaniment
+    # comes forward enough that the result does not feel quieter than the
+    # source recording.  This is deliberately gentle and keeps the phrase
+    # pauses below the compressor threshold.
+    threshold = 0.16
+    ratio = 2.2 if style == "funk" else 2.5
+    makeup = 1.16 if style == "funk" else 1.12
+    for index, sample in enumerate(values):
+        magnitude = abs(sample)
+        if magnitude > threshold:
+            magnitude = threshold + (magnitude - threshold) / ratio
+            values[index] = math.copysign(magnitude, sample)
+        values[index] *= makeup
+
     peak = max((abs(value) for value in values), default=0.0)
     if peak:
-        gain = 0.82 / peak
+        gain = 0.92 / peak
         values = [value * gain for value in values]
     output.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(output), "wb") as wav:
