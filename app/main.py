@@ -122,6 +122,8 @@ async def get_generation(job_id: str) -> dict[str, Any]:
         variant["audio_url"] = f"/api/generations/{job_id}/audio/{variant['style']}"
     if (DATA / job_id / "melody.wav").is_file():
         result["melody_audio_url"] = f"/api/generations/{job_id}/audio/melody"
+    if (DATA / job_id / "melody-measured.wav").is_file():
+        result["melody_measured_audio_url"] = f"/api/generations/{job_id}/audio/melody-measured"
     return result
 
 
@@ -129,7 +131,7 @@ async def get_generation(job_id: str) -> dict[str, Any]:
 async def get_audio(job_id: str, style: str) -> FileResponse:
     if not re.fullmatch(r"[0-9a-f]{32}", job_id):
         raise HTTPException(404, "Generation not found")
-    if style not in {"funk", "lofi", "melody"}:
+    if style not in {"funk", "lofi", "melody", "melody-measured"}:
         raise HTTPException(404, "Variant not found")
     path = DATA / job_id / f"{style}.wav"
     if not path.is_file():
@@ -172,7 +174,7 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
         # Keep acoustic measurement and musical-intent correction as explicit
         # stages.  ``auto`` only changes a high-confidence repeated-pair
         # phrase; ``measured`` remains available for a strict A/B baseline.
-        measured_notes = analysis.get("notes", [])
+        measured_notes = [dict(note) for note in analysis.get("notes", [])]
         intent_mode = os.getenv("MELODY_INTENT_MODE", "auto")
         selected_notes, intent = apply_melody_intent(measured_notes, intent_mode)
         analysis["notes"] = selected_notes
@@ -202,6 +204,20 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
         job["pitch_trace"] = analysis.get("pitch_trace", [])
         (job_dir / "melody.mid").write_bytes(midi_data)
         (job_dir / "melody_ir.json").write_text(json.dumps(ir, ensure_ascii=False, indent=2), encoding="utf-8")
+        # Keep the strict acoustic baseline beside the selected canonical
+        # melody whenever the intent layer changed pitches. This makes the
+        # A/B audible on a phone and prevents a heuristic from becoming an
+        # unreviewable one-way transformation.
+        if intent.get("changed_notes"):
+            measured_analysis = dict(analysis)
+            measured_analysis["notes"] = measured_notes
+            measured_analysis["source"] = f"{measured_analysis.get('source', transcription.name)}-measured"
+            measured_midi, _ = melody_to_midi(measured_analysis)
+            (job_dir / "melody-measured.mid").write_bytes(measured_midi)
+            measured_backend = await asyncio.to_thread(
+                render_audio, job_dir / "melody-measured.mid", "original", job_dir / "melody-measured.wav"
+            )
+            job.setdefault("renderers", {})["melody_measured"] = measured_backend
         # Render the canonical MIDI as a direct listening reference. It uses
         # the measured notes only; style models run after this artifact exists.
         original_backend = await asyncio.to_thread(
