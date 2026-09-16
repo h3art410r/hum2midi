@@ -108,3 +108,5 @@
 - 30 项单元测试全部通过。该候选是可解释的实验，不代表所有哼唱都已解决；下一步要用手机对 A/B 试听，并在拿到腾讯/专业云转谱凭据后做第三方对照。
 - 批量离线回放仓库中的 67 份规范化真实录音：55 份同一 14 音重复对旋律触发高置信候选，12 份（包括所有 15 音样本）保持 measured；没有改变任何起音或时值。
 - 生产机真实 HTTP A/B job `3a4632f9ea1647b9ac0aaecffc8c1157` 已完成，API 返回 `melody_intent.mode=major-scale-repeated-pair`、`changed_notes=8`，canonical MIDI 为 `[44,44,51,51,53,53,51,49,49,48,48,46,46,44]`；Funk/Lofi 与 canonical melody 音频均由 FluidSynth 成功渲染。
+- A/B 可听版本已进入页面和 API：当候选触发时，结果区同时显示 A 声学测量基线和 B 旋律意图候选；新增 `/audio/melody-measured`，不影响 Funk/Lofi 主结果。
+- 生产机第二次真实端到端 job `c81de4cea364420d88f7961c10315c2a` 验证通过：两条 melody 音频、Funk、Lofi 均 HTTP 200；页面可直接盲听 A/B。
