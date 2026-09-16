@@ -118,6 +118,8 @@ async def get_generation(job_id: str) -> dict[str, Any]:
         }
     for variant in result.get("variants", {}).values():
         variant["audio_url"] = f"/api/generations/{job_id}/audio/{variant['style']}"
+    if (DATA / job_id / "melody.wav").is_file():
+        result["melody_audio_url"] = f"/api/generations/{job_id}/audio/melody"
     return result
 
 
@@ -125,7 +127,7 @@ async def get_generation(job_id: str) -> dict[str, Any]:
 async def get_audio(job_id: str, style: str) -> FileResponse:
     if not re.fullmatch(r"[0-9a-f]{32}", job_id):
         raise HTTPException(404, "Generation not found")
-    if style not in {"funk", "lofi"}:
+    if style not in {"funk", "lofi", "melody"}:
         raise HTTPException(404, "Variant not found")
     path = DATA / job_id / f"{style}.wav"
     if not path.is_file():
@@ -183,6 +185,12 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
         job["pitch_trace"] = analysis.get("pitch_trace", [])
         (job_dir / "melody.mid").write_bytes(midi_data)
         (job_dir / "melody_ir.json").write_text(json.dumps(ir, ensure_ascii=False, indent=2), encoding="utf-8")
+        # Render the canonical MIDI as a direct listening reference. It uses
+        # the measured notes only; style models run after this artifact exists.
+        original_backend = await asyncio.to_thread(
+            render_audio, job_dir / "melody.mid", "original", job_dir / "melody.wav"
+        )
+        job.setdefault("renderers", {})["melody"] = original_backend
         job["status"] = "styling"
         job["message"] = "文本模型正在根据原始 MIDI 整体生成 Funk 与 Lofi 风格…"
 
