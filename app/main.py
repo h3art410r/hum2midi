@@ -123,7 +123,12 @@ async def get_audio(job_id: str, style: str) -> FileResponse:
     path = DATA / job_id / f"{style}.wav"
     if not path.is_file():
         raise HTTPException(404, "Audio is not ready")
-    return FileResponse(path, media_type="audio/wav", filename=path.name)
+    return FileResponse(
+        path,
+        media_type="audio/wav",
+        filename=path.name,
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
