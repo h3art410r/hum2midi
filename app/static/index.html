@@ -324,10 +324,10 @@
       log('RESULTS_RENDER', `variants=${Object.keys(job.variants || {}).join(',')}`, `notes=${job.melody?.note_events?.length || 0}`);
       const names = {funk:'Funk',lofi:'Lofi'};
       const successful = Object.values(job.variants || {}).filter(item => item.status === 'completed');
-      const intent = job.melody_intent;
-      const intentText = intent?.changed_notes ? `旋律意图候选已修正 ${intent.changed_notes} 个音；下面同时保留声学测量基线，方便盲听 A/B。` : '直接播放音频测得的 canonical MIDI。';
+      const intent = job.melody_semantic;
+      const intentText = intent?.changed_notes ? `模型记忆匹配后修正 ${intent.changed_notes} 个音；下面同时保留声学测量基线，方便盲听 A/B。` : '直接播放音频测得的 canonical MIDI。';
       const measuredAudio = job.melody_measured_audio_url ? `<p class="ab-label">A · 声学测量基线</p><audio controls preload="none" src="${job.melody_measured_audio_url}"></audio>` : '';
-      const selectedLabel = intent?.changed_notes ? 'B · 旋律意图候选' : 'canonical MIDI';
+      const selectedLabel = intent?.changed_notes ? 'B · 语义模型候选' : 'canonical MIDI';
       const melodyCard = job.melody_audio_url ? `<article class="card"><h2>原始旋律 MIDI</h2><p>${intentText}</p>${measuredAudio}<p class="ab-label">${selectedLabel}</p><audio controls preload="none" src="${job.melody_audio_url}"></audio></article>` : '';
       results.innerHTML = melodyCard + successful.map(item => `<article class="card"><h2>${names[item.style] || item.style}</h2><p>${'模型把原始 MIDI 作为音乐种子重新创作风格，再渲染为音频'}</p><audio controls preload="none" src="${item.audio_url}"></audio></article>`).join('') + renderMelodyDebug(job.melody);
       const debug = results.querySelector('#melody-debug');
