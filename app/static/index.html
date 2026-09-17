@@ -62,8 +62,15 @@
     /* The 16:9 fixed-height canvas is for mouse/keyboard desktop debugging.
        Tablets are touch devices and need a naturally scrolling document so
        the file picker and generate button are never clipped below the fold. */
-    @media (min-width:1024px) and (hover:hover) { .stage { aspect-ratio:16/9; min-height:0; height:min(100vh,720px); } }
-    @media (min-width:1024px) and (hover:hover) { .stage.expanded { aspect-ratio:auto; min-height:100vh; height:auto; align-self:start; } }
+    @media (min-width:1024px) and (hover:hover) {
+      .stage { aspect-ratio:auto; min-height:max(calc(min(100vw,1280px) * 9 / 16), min(100vh,720px)); height:auto; overflow:visible; align-self:start; }
+      /* Results and the melody debug panel can be taller than the 16:9 shell.
+         Let the shell grow after a job completes so its bottom content remains
+         visible instead of being clipped by the landing-page canvas. */
+      .stage.has-results { aspect-ratio:auto; min-height:100vh; height:auto; overflow:visible; align-self:start; }
+      .stage.has-results main { margin:0 auto; }
+      .stage.expanded { aspect-ratio:auto; min-height:100vh; height:auto; align-self:start; }
+    }
     @media (hover:none) { body { display:block; background:var(--paper); } .stage { width:100%; min-height:100vh; height:auto; overflow:visible; aspect-ratio:auto; } main { padding:42px 0 56px; } footer { margin-top:auto; } }
     @media (max-width:520px) { body { background:var(--paper); } .stage { padding:24px 22px max(24px,env(safe-area-inset-bottom)); } header { align-items:flex-start; } .tag { max-width:130px; text-align:center; } main { padding:46px 0; } #record { width:136px;height:136px; } #results { grid-template-columns:1fr; } footer { margin-top:auto; } }
     @media (max-width:760px) { .note-list { grid-template-columns:repeat(2,minmax(0,1fr)); } }
@@ -288,11 +295,11 @@
     for (const eventName of ['contextmenu','selectstart','dragstart','gesturestart']) {
       recordButton.addEventListener(eventName, event => event.preventDefault());
     }
-    redo.addEventListener('click', () => { preview.classList.add('hidden'); redo.classList.add('hidden'); make.classList.add('hidden'); results.classList.add('hidden'); timer.textContent='00:00'; setStatus('按住按钮重新哼唱。'); });
+    redo.addEventListener('click', () => { preview.classList.add('hidden'); redo.classList.add('hidden'); make.classList.add('hidden'); results.classList.add('hidden'); stage.classList.remove('has-results','expanded'); timer.textContent='00:00'; setStatus('按住按钮重新哼唱。'); });
     make.addEventListener('click', async () => {
       log('GENERATE_CLICK', `blob=${!!blob}`, blob ? `${blob.size} bytes ${blob.type}` : 'none');
       if (!blob) return;
-      make.disabled = true; redo.disabled = true; results.classList.add('hidden');
+      make.disabled = true; redo.disabled = true; results.classList.add('hidden'); stage.classList.remove('has-results','expanded');
       setStatus('正在上传录音，提取 MIDI 并由模型整体风格化…');
       try {
         log('UPLOAD_START', 'sending audio body');
@@ -333,6 +340,7 @@
       const debug = results.querySelector('#melody-debug');
       debug?.addEventListener('toggle', () => stage.classList.toggle('expanded', debug.open));
       results.classList.remove('hidden');
+      stage.classList.add('has-results');
       setStatus(successful.length === 2 ? '完成：两种模型风格音频已生成。' : successful.length ? '一个模型风格版本已就绪。' : '模型风格生成失败。');
     }
     function pitchName(midi) {
