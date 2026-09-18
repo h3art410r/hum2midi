@@ -106,6 +106,9 @@ class DiffSynthRemoteClient:
         try:
             with urllib.request.urlopen(request, timeout=self.config.timeout_seconds) as response:
                 return _Response(response.status, response.read())
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[-1200:]
+            raise DiffSynthRemoteError(f"DiffSynth worker HTTP {exc.code}: {detail}") from exc
         except urllib.error.URLError as exc:
             raise DiffSynthRemoteError(f"Cannot reach DiffSynth worker {self.config.url}: {exc.reason}") from exc
 

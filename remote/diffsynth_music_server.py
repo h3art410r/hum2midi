@@ -14,6 +14,7 @@ from pathlib import Path
 
 import torch
 import torchaudio
+import soundfile as sf
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
@@ -101,7 +102,11 @@ async def generate(
     output_path = input_path.with_name(input_path.stem + "-output.wav")
     try:
         input_path.write_bytes(await audio.read())
-        waveform, sample_rate = torchaudio.load(str(input_path))
+        # Read the normalized WAV with soundfile. New torchaudio releases
+        # route load() through TorchCodec, which is unnecessary for WAV and
+        # makes the worker harder to deploy on Windows.
+        samples, sample_rate = sf.read(str(input_path), always_2d=True, dtype="float32")
+        waveform = torch.from_numpy(samples.T.copy())
         if sample_rate != 48000:
             waveform = torchaudio.functional.resample(waveform, sample_rate, 48000)
         waveform = waveform.mean(dim=0, keepdim=True)
