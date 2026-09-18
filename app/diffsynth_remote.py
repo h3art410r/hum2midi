@@ -46,7 +46,13 @@ class DiffSynthRemoteClient:
 
     def health(self) -> dict[str, object]:
         try:
-            data = self._request("GET", "/health")
+            # Health must never inherit the long generation timeout; a frozen
+            # CUDA worker should degrade quickly instead of making the public
+            # page appear as a 502.
+            probe = DiffSynthRemoteClient(
+                DiffSynthRemoteConfig(self.config.url, timeout_seconds=min(5, self.config.timeout_seconds), token=self.config.token)
+            )
+            data = probe._request("GET", "/health")
             return data if isinstance(data, dict) else {"status": "ok"}
         except Exception as exc:
             return {"status": "unavailable", "error": str(exc)}
