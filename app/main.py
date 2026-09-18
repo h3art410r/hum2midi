@@ -254,7 +254,7 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
         completed_variants = 0
         for plan_id, plan in PROMPT_PLANS.items():
             variant_id = plan_id
-            job["message"] = f"Stable Audio 正在生成方案 {plan['name']}（{completed_variants}/{total_variants}）…"
+            job["message"] = f"音乐模型正在生成方案 {plan['name']}（{completed_variants}/{total_variants}）…"
             _backend_log(
                 f"generation started plan={plan_id} noise={plan['noise']}",
                 job_id=job_id,
@@ -308,11 +308,11 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
             )
         if all(item.get("status") == "completed" for item in job["variants"].values()) and len(job["variants"]) == total_variants:
             job["status"] = "completed"
-            job["message"] = "Stable Audio 五种纵向方案音频已生成"
+            job["message"] = "五种纵向方案音频已生成"
             _backend_log("job completed: all five vertical plans ready", job_id=job_id)
         else:
             job["status"] = "failed"
-            job["message"] = "Stable Audio 纵向方案生成失败"
+            job["message"] = "纵向方案生成失败"
             job["error"] = "; ".join(
                 item.get("error", "unknown")
                 for item in job["variants"].values()
@@ -323,7 +323,7 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
         logger.exception("audio_provider_generation_failed job=%s", job_id)
         job["status"] = "failed"
         job["error"] = _friendly_error(exc)
-        job["message"] = "Stable Audio 生成失败"
+        job["message"] = "音乐模型生成失败"
         _backend_log(f"worker crashed: {job['error']}", job_id=job_id, level="ERROR")
 
 

@@ -126,7 +126,8 @@ async def generate(
             template_inputs=[{"model_id": 1, "audio": prosody}],
             negative_template_inputs=[{"model_id": 1, "audio": prosody}],
         )
-        torchaudio.save(str(output_path), result.cpu(), 48000)
+        # Avoid torchaudio.save -> TorchCodec on newer torchaudio builds.
+        sf.write(str(output_path), result.detach().float().cpu().numpy().T, 48000, subtype="PCM_16")
         print(f"generated seconds={seconds:.2f} elapsed={time.perf_counter() - started:.1f}s vram={torch.cuda.max_memory_allocated()/1024**3:.2f}GB", flush=True)
         return FileResponse(output_path, media_type="audio/wav", filename="diffsynth-output.wav")
     except Exception as exc:
