@@ -110,6 +110,9 @@ async def generate(
         if sample_rate != 48000:
             waveform = torchaudio.functional.resample(waveform, sample_rate, 48000)
         waveform = waveform.mean(dim=0, keepdim=True)
+        # The paper's recommended composition is complementary: Control
+        # (model_id=0) preserves vocal onsets/rhythm while Prosody (model_id=1)
+        # preserves pitch and timing without copying vocal timbre.
         prosody = extract_prosody(waveform)
         seconds = float(duration) if duration.strip() else prosody.shape[1] / 48000
         started = time.perf_counter()
@@ -123,8 +126,14 @@ async def generate(
             tiled=True,
             cfg_scale=float(os.getenv("DIFFSYNTH_CFG_SCALE", "4")),
             num_inference_steps=int(os.getenv("DIFFSYNTH_STEPS", "50")),
-            template_inputs=[{"model_id": 1, "audio": prosody}],
-            negative_template_inputs=[{"model_id": 1, "audio": prosody}],
+            template_inputs=[
+                {"model_id": 0, "audio": waveform},
+                {"model_id": 1, "audio": prosody},
+            ],
+            negative_template_inputs=[
+                {"model_id": 0, "audio": waveform},
+                {"model_id": 1, "audio": prosody},
+            ],
         )
         # Avoid torchaudio.save -> TorchCodec on newer torchaudio builds.
         sf.write(str(output_path), result.detach().float().cpu().numpy().T, 48000, subtype="PCM_16")
