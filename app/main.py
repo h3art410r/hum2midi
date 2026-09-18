@@ -237,9 +237,9 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
                 f"Stable Audio CLI not found: {provider.script}. "
                 "Set STABLE_AUDIO_ROOT to optimized/tflite."
             )
-            input_seconds = StableAudioClient.audio_seconds(audio_path)
+        input_seconds = StableAudioClient.audio_seconds(audio_path)
         if input_seconds is None:
-            input_seconds = provider.config.output_seconds
+            input_seconds = getattr(getattr(provider, "config", None), "output_seconds", 10.0)
             _backend_log(
                 f"could not read input duration; using configured fallback {input_seconds}s",
                 job_id=job_id,
