@@ -75,7 +75,7 @@ async def home() -> FileResponse:
 
 
 @app.get("/api/health")
-async def health() -> dict[str, str]:
+async def health() -> dict[str, Any]:
     provider = _make_provider()
     if isinstance(provider, DiffSynthRemoteClient):
         remote = provider.health()
