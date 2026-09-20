@@ -161,22 +161,22 @@ def _render_with_timings(
     def timed_progress(iterable):
         iterator = iter(iterable)
         step_index = 0
-        previous = time.perf_counter()
+        step_started = None
         while True:
             try:
                 timestep = next(iterator)
             except StopIteration:
                 break
             now = time.perf_counter()
-            if step_index:
-                elapsed = now - previous
+            if step_started is not None:
+                elapsed = now - step_started
                 timings[f"denoise_step_{step_index}_seconds"] = elapsed
                 _worker_log("DENOISE_STEP_DONE", request_id, step=step_index, elapsed=f"{elapsed:.3f}s")
-            yield timestep
-            previous = time.perf_counter()
             step_index += 1
-        if step_index:
-            elapsed = time.perf_counter() - previous
+            step_started = time.perf_counter()
+            yield timestep
+        if step_started is not None:
+            elapsed = time.perf_counter() - step_started
             timings[f"denoise_step_{step_index}_seconds"] = elapsed
             _worker_log("DENOISE_STEP_DONE", request_id, step=step_index, elapsed=f"{elapsed:.3f}s")
 

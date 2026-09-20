@@ -107,18 +107,20 @@ class DiffSynthRemoteClient:
         if not output.stat().st_size:
             raise DiffSynthRemoteError("DiffSynth worker returned an empty audio file")
         request_seconds = round(time.perf_counter() - request_started, 3)
+        response_headers = {key.lower(): value for key, value in response.headers.items()}
+        worker_header_names = (
+            "X-DiffSynth-Request-Id",
+            "X-DiffSynth-Conditioning-Seconds",
+            "X-DiffSynth-Inference-Seconds",
+            "X-DiffSynth-Save-Seconds",
+            "X-DiffSynth-Total-Seconds",
+            "X-DiffSynth-Peak-Allocated-GB",
+            "X-DiffSynth-Peak-Reserved-GB",
+        )
         worker_headers = {
-            key: response.headers.get(key, "")
-            for key in (
-                "X-DiffSynth-Request-Id",
-                "X-DiffSynth-Conditioning-Seconds",
-                "X-DiffSynth-Inference-Seconds",
-                "X-DiffSynth-Save-Seconds",
-                "X-DiffSynth-Total-Seconds",
-                "X-DiffSynth-Peak-Allocated-GB",
-                "X-DiffSynth-Peak-Reserved-GB",
-            )
-            if response.headers.get(key)
+            key: response_headers.get(key.lower(), "")
+            for key in worker_header_names
+            if response_headers.get(key.lower())
         }
         worker_logs: list[dict[str, object]] = []
         worker_request_id = worker_headers.get("X-DiffSynth-Request-Id")
