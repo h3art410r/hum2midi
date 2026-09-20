@@ -6,6 +6,8 @@
 - 新版本以 `docs/SOTA_NATIVE_REBUILD_SPEC.md` 为边界：旧版 `app/`、`remote/`、脚本、MIDI/YIN、Stable Audio、Qwen、历史 prompt、显存魔改和缓存逻辑都不能作为新版本依赖。
 - 新版本先从空服务骨架实现真实音频到官方模型到音频输出的最小链路，再建立质量基线；旧版只用于历史对照，旧缓存不得冒充新结果。
 - 新版本当前确定的模型方案是 `DiffSynth-Music` 官方 Prosody + `TemplatePipeline`，官方基线参数为 `tiled=True`、CFG 4、50 steps、seed 42；模型只在独立 RTX 5060 Ti Worker 中运行，FastAPI 不加载模型。
+- 已复核 DiffSynth-Music 原论文：其核心是冻结 ACE-Step-1.5-XL-SFT DiT + Control/Prosody/Reference 模板，把音频条件变成逐层 KV memory 注入生成分支；Prosody 用 pYIN 音高轨迹和包络正弦重合成，保留音高与时间但削弱音色和发音。论文的 50 步 CFG4 实验来自带歌词歌曲，不能直接当作手机哼唱的质量保证。
+- 新版本先保持 Prosody-only 的干净基线；若旋律身份不足，下一项论文一致的实验是 Control + Prosody。Reference 只用于风格/音色，不用于修复节奏。
 
 ## 2026-09-21：固定输入试听实验室
 
