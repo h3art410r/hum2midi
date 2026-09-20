@@ -4,13 +4,15 @@
 
 ## 5060Ti Windows 机器
 
-在仓库根目录 PowerShell 执行：
+首次部署时，在仓库根目录 PowerShell 执行常驻守护脚本：
 
 ```powershell
-.\scripts\start_diffsynth_music_server.ps1
+.\scripts\run_diffsynth_worker_daemon.ps1 -Port 8765 -PollSeconds 30
 ```
 
-脚本会创建 `.venv-diffsynth`、从官方 GitHub checkout DiffSynth-Studio、安装 CUDA 版 PyTorch/torchaudio 和服务依赖，然后启动 `0.0.0.0:8765`。第一次启动会从 ModelScope 下载 `DiffSynth-Studio/DiffSynth-Music`，下载和模型加载可能需要较长时间；窗口必须保持运行。
+守护脚本会读取 `remote/worker_mode.txt`，调用底层启动脚本创建 `.venv-diffsynth`、从官方 GitHub checkout DiffSynth-Studio、安装 CUDA 版 PyTorch/torchaudio 和服务依赖，然后启动 `0.0.0.0:8765`。第一次启动会从 ModelScope 下载 `DiffSynth-Studio/DiffSynth-Music`，下载和模型加载可能需要较长时间；守护进程会一直保持运行。之后它每 30 秒 fetch `origin/main`，发现新提交后等待当前任务完成、拉取代码并自动重启 Worker；不需要每次手动部署。需要更快检查时使用 `-PollSeconds 15`。
+
+不要同时运行 `start_diffsynth_music_server.ps1` 和 daemon；底层脚本只用于首次排查或手动恢复。daemon 生命周期和 Worker 输出分别记录在 `remote\logs\worker-daemon.log` 及同目录的时间戳日志中。
 
 如果 CUDA wheel 不是当前机器合适的版本，可以先设置：
 

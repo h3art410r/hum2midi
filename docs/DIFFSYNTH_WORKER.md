@@ -8,27 +8,27 @@
 
 只有 `dit_cuda` 启动或推理发生 OOM，才允许临时切回 `cpu`，并把 OOM 原文和发生阶段报告给主 Agent。
 
-## 更新和启动
+## 常驻启动和自动更新
 
-每次收到“更新 Worker”或“切换显存模式”的任务，先在仓库目录执行：
+Worker 现在由守护脚本负责生命周期。首次部署时先停止手动启动的 raw worker，再在仓库根目录启动：
 
 ```powershell
-git pull origin main
+.\scripts\run_diffsynth_worker_daemon.ps1 -Port 8765 -PollSeconds 30
 ```
 
-按仓库当前目标启动（自动读取 `remote/worker_mode.txt`）：
+脚本会读取 `remote/worker_mode.txt`，启动现有的模型启动脚本，并保持 Worker 常驻。之后每 30 秒执行一次 `git fetch origin main`：发现新提交后会等待当前生成完成，执行 fast-forward，重新安装必要依赖并重启模型，最后轮询 `/health` 直到新的 `build` 可用。可以把 `-PollSeconds` 改为 `15` 加快更新检查。
+
+守护进程日志位于 `remote\logs\worker-daemon.log`；每次 Worker 启动的 stdout/stderr 位于同目录的带时间戳文件。日志目录已加入 `.gitignore`，不会进入提交。
+
+守护脚本的安全行为：工作区有未提交改动时拒绝自动拉取；本地分支与远端分叉时拒绝 reset；更新前等待正在生成的请求；新版本启动健康检查失败时自动回滚到更新前的 clean commit。守护脚本自身变更后需要手动重启一次守护进程，Worker 代码和 `worker_mode.txt` 的后续提交不需要手动重启。
+
+首次启动或调试时仍可直接运行底层脚本：
 
 ```powershell
 .\scripts\start_diffsynth_music_server.ps1 -Port 8765
 ```
 
-也可以显式写出当前目标：
-
-```powershell
-.\scripts\start_diffsynth_music_server.ps1 -Port 8765 -OffloadMode dit_cuda
-```
-
-`dit_cuda` 是实验模式，16GB 显存可能 OOM；它是当前必须执行的速度实验。发生 OOM 时停止 Worker，改回 `-OffloadMode cpu` 重启，并报告原始错误。`none` 会完全关闭 VRAM 管理，只能在明确要求时使用。
+但不要让它和守护脚本同时监听 8765。`dit_cuda` 是实验模式，16GB 显存可能 OOM；发生 OOM 时应修改 `remote/worker_mode.txt` 为 `cpu` 并提交，让守护脚本自动切换，然后报告原始错误。`none` 会完全关闭 VRAM 管理，只能在明确要求时使用。
 
 ## 启动后验收
 

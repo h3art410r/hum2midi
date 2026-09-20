@@ -10,6 +10,12 @@
 - 同时修正 Worker 响应头 `X-DiffSynth-Conditioning-Seconds`：此前误填了整个请求耗时，现在只记录 `CONDITIONING_READY` 阶段，避免后端诊断误导。
 - 修正后的响应头已在 Worker 构建 `4448455` 生效。相同输入改用 steps 5 的任务 `a0ba21ab94` 成功完成：Worker 141.699 秒、开发机请求 141.984 秒，conditioning 2.191 秒，模型推理 139.360 秒，输出仍为 10.96 秒。
 - steps 5 的 5 个 denoise step 分别约 9.325、8.836、9.060、8.843、9.096 秒；相对 steps 10 的约 196.97 秒节省约 55 秒（约 28%），但模板正/负分支仍约 53 秒，固定开销明显。峰值 allocated/reserved 仍约 26.98/27.03GB，显存压力没有因 steps 降低而消失。
+- 同样 steps 5 改用 CFG 1 的任务 `2e05d1cdee` 成功完成：Worker 95.619 秒、开发机请求 96.892 秒，模型推理 94.986 秒，5 个 denoise step 各约 3.64–3.77 秒。相对 CFG 4 的 steps 5 再节省约 46 秒；这说明 CFG 双分支是当前最直接的速度杠杆，但 CFG 1 需要试听确认是否牺牲风格遵循度。
+
+## 2026-09-20：Worker 常驻自动更新
+
+- 新增 `scripts/run_diffsynth_worker_daemon.ps1` 和 `.cmd` 入口。首次启动后 daemon 负责拥有 Worker 子进程、保持端口存活、每 15 或 30 秒 fetch `origin/main`，等待正在生成的请求结束后 fast-forward 并自动重新部署模型。
+- daemon 将生命周期和每次 Worker 启动的 stdout/stderr 写入 `remote/logs/`，工作区有未提交改动或 Git 分叉时拒绝自动更新；新版本健康检查失败会回滚到更新前的 clean commit。daemon 自身脚本变更仍需手动重启一次。
 
 ## 2026-09-20：DiffSynth Worker 细粒度性能埋点
 
