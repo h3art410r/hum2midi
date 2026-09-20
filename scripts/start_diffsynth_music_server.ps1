@@ -1,10 +1,13 @@
 param(
   [int]$Port = 8765,
-  [string]$Python = $env:DIFFSYNTH_PYTHON
+  [string]$Python = $env:DIFFSYNTH_PYTHON,
+  [ValidateSet("cpu", "dit_cuda", "none")]
+  [string]$OffloadMode = $env:DIFFSYNTH_OFFLOAD_MODE
 )
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 if (-not $Python) { $Python = "python" }
+if (-not $OffloadMode) { $OffloadMode = "cpu" }
 $Venv = Join-Path $RepoRoot ".venv-diffsynth"
 $DiffSynthDir = Join-Path $RepoRoot ".vendor\DiffSynth-Studio"
 if (-not (Test-Path (Join-Path $Venv "Scripts\python.exe"))) {
@@ -22,8 +25,12 @@ $TorchIndex = if ($env:DIFFSYNTH_TORCH_INDEX_URL) { $env:DIFFSYNTH_TORCH_INDEX_U
 & $Vpy -m pip install -e $DiffSynthDir
 $env:PYTHONPATH = $RepoRoot
 $env:DIFFSYNTH_SERVER_PORT = $Port
+$env:DIFFSYNTH_OFFLOAD_MODE = $OffloadMode
+$env:H2M_WORKER_BUILD = (& git -C $RepoRoot rev-parse --short HEAD 2>$null).Trim()
+if (-not $env:H2M_WORKER_BUILD) { $env:H2M_WORKER_BUILD = "unknown" }
 $env:DIFFSYNTH_SERVER_HOST = if ($env:DIFFSYNTH_SERVER_HOST) { $env:DIFFSYNTH_SERVER_HOST } else { "0.0.0.0" }
 Write-Host "Starting DiffSynth-Music Prosody worker on $($env:DIFFSYNTH_SERVER_HOST):$Port"
+Write-Host "Build: $($env:H2M_WORKER_BUILD); offload mode: $OffloadMode"
 $ModelId = if ($env:DIFFSYNTH_MODEL_ID) { $env:DIFFSYNTH_MODEL_ID } else { "DiffSynth-Studio/DiffSynth-Music" }
 Write-Host "First launch downloads model $ModelId. Keep this window open."
 & $Vpy -m uvicorn remote.diffsynth_music_server:app --host $env:DIFFSYNTH_SERVER_HOST --port $Port

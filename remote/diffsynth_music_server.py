@@ -35,6 +35,7 @@ TOKEN = os.getenv("DIFFSYNTH_REMOTE_TOKEN", "")
 WORK_DIR = Path(os.getenv("DIFFSYNTH_WORK_DIR", "runtime/diffsynth_jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 OFFLOAD_MODE = os.getenv("DIFFSYNTH_OFFLOAD_MODE", "cpu").strip().lower()
+WORKER_BUILD = os.getenv("H2M_WORKER_BUILD", "unknown")
 
 app = FastAPI(title="DiffSynth-Music Prosody Worker")
 PIPE = None
@@ -357,6 +358,7 @@ def health() -> dict[str, object]:
         "control": "control+prosody",
         "templates": ["control", "prosody"],
         "offload_mode": OFFLOAD_MODE,
+        "build": WORKER_BUILD,
         "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none",
         "model_id": MODEL_ID,
     }
