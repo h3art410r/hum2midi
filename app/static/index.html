@@ -343,7 +343,7 @@
       try {
         log('UPLOAD_START', 'sending audio body');
         const ext = blob.type.includes('webm') ? 'webm' : 'm4a';
-        const response = await debugFetch('/api/generations',{method:'POST',headers:{'Content-Type':blob.type,'X-Audio-Filename':`hum.${ext}`,'X-DiffSynth-Control-Profile':'control_prosody','X-DiffSynth-Cfg-Scale':'4','X-DiffSynth-Steps':'10','X-DiffSynth-Seed':'101','X-DiffSynth-Denoising-Strength':'0.85'},body:blob});
+        const response = await debugFetch('/api/generations',{method:'POST',headers:{'Content-Type':blob.type,'X-Audio-Filename':`hum.${ext}`,'X-DiffSynth-Control-Profile':'prosody','X-DiffSynth-Cfg-Scale':'4','X-DiffSynth-Steps':'50','X-DiffSynth-Seed':'101'},body:blob});
         const created = await response.json();
         if (!response.ok) throw new Error(created.detail || '请求失败');
         await poll(created.id);
@@ -369,7 +369,7 @@
     function renderResults(job) {
       log('RESULTS_RENDER', `provider=${job.provider || 'stable-audio'}`, `plans=${Object.keys(job.plans || {}).length}`, `variants=${Object.keys(job.variants || {}).join(',')}`);
       const successful = Object.values(job.variants || {}).filter(item => item.status === 'completed');
-      results.insertAdjacentHTML('afterbegin', successful.map(item => `<article class="card"><h2>${escapeHtml(item.plan_name || item.plan)} · 重绘强度 ${escapeHtml(item.requested_denoising_strength ?? item.noise)}</h2><p>试听反馈：能否听出原哼唱？改编幅度是否足够？</p><audio controls preload="none" src="${apiUrl(item.audio_url)}"></audio><details><summary>查看本次 prompt（中文参考 + 英文原文）</summary><h3>中文参考</h3><p>${escapeHtml(item.prompt_zh || job.prompt_translations?.[item.plan] || '')}</p><h3>模型实际英文 prompt</h3><pre>${escapeHtml(item.prompt || job.prompts?.[item.plan] || '')}</pre></details></article>`).join(''));
+      results.insertAdjacentHTML('afterbegin', successful.map(item => `<article class="card"><h2>${escapeHtml(item.plan_name || item.plan)} · 官方 Prosody</h2><p>试听反馈：能否听出原哼唱？改编幅度是否足够？</p><audio controls preload="none" src="${apiUrl(item.audio_url)}"></audio><details><summary>查看本次 prompt（中文参考 + 英文原文）</summary><h3>中文参考</h3><p>${escapeHtml(item.prompt_zh || job.prompt_translations?.[item.plan] || '')}</p><h3>模型实际英文 prompt</h3><pre>${escapeHtml(item.prompt || job.prompts?.[item.plan] || '')}</pre></details></article>`).join(''));
       results.classList.remove('hidden');
       stage.classList.add('has-results');
       setStatus(successful.length === 1 ? '完成：Funk 音频已生成。' : '音乐模型方案生成失败。');

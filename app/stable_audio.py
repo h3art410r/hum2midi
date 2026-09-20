@@ -23,9 +23,8 @@ PROMPT_PLANS = {
     "1": {
         "name": "Funk",
         "description": "保留原始旋律和节奏，转换成完整的器乐 Funk 编曲。",
-        # Kept for the local Stable Audio compatibility path. The active
-        # DiffSynth worker receives the explicit denoising_strength request
-        # parameter from the web app.
+        # Kept for the optional Stable Audio compatibility path. The active
+        # DiffSynth worker uses the official TemplatePipeline path instead.
         "noise": 0.65,
         "prompt": "Create a polished instrumental funk track from the input humming. Keep the original melody, phrasing, and rhythmic identity clearly recognizable. Replace the raw humming with a strong bass groove, syncopated drums, rhythmic guitar, tight keyboard accents, and a catchy musical arrangement. Make it energetic, stylish, and memorable. Do not keep the original vocal recording or its background noise.",
         "translation": "根据输入哼唱创作一首完整的器乐 Funk 音乐。清楚保留原始旋律、乐句和节奏身份，用有力度的贝斯律动、切分鼓点、节奏吉他、键盘点缀和抓耳编曲替换原始哼唱。整体要有能量、有风格、有记忆点，不保留原始人声或底噪。",

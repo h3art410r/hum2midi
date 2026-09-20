@@ -1,61 +1,48 @@
 # DiffSynth Worker Agent 运行说明
 
-这份说明是给负责 GPU Worker 部署的 Agent 读取的。Worker 运行在 Windows + RTX 5060 Ti 16GB，开发机 FastAPI 通过 `http://192.168.9.100:8765` 调用它。Worker 只负责加载模型和生成音频，不修改前端、后端任务逻辑或提示词。
+这份说明给 GPU Worker 部署 Agent 使用。Worker 运行在 Windows + RTX 5060 Ti 16GB，开发机 FastAPI 通过内网地址调用它。Worker 只负责加载 `DiffSynth-Studio/DiffSynth-Music` 和生成音频。
 
-## 当前任务目标
+## 运行方式
 
-当前生产实验目标是 `cpu` 安全路径。它不是把整套模型放到 CPU 上运行，而是让主模型按层动态换入、模板 block 在 CPU 与 CUDA 之间分页；仓库文件 `remote/worker_mode.txt` 是当前目标，启动脚本不带参数时会自动读取它。该路径已经在真实 10.943 秒录音、Control + Prosody、CFG4、steps10 上验证峰值约 7.84GiB。
+当前 Worker 只保留官方模型卡的推理路径：`remote/diffsynth_music_server.py` 使用官方的低显存 `ModelConfig`、`TemplatePipeline.from_pretrained(..., lazy_loading=True)` 和官方 `TemplatePipeline(...)` 调用。`remote/worker_mode.txt` 必须是 `official`。
 
-`dit_cuda` 已在修复后的代码上用同一段 10.943 秒录音、Control + Prosody、CFG4、steps10 验证：峰值约 8.90GiB、端到端约 41 秒，适合做速度 A/B，但仍保留为实验模式。`none` 会完全关闭 VRAM 管理；同一配置实测峰值约 19.29GiB，会触发 WDDM 超额迁移，禁止作为 16GB 常驻模式。
+不要加入 denoising anchor、KV cache 合并或量化、模板层 CPU 分页、负分支 cache 复用、手工镜像 pipeline、模型 forward monkey-patch 等逻辑。需要观察性能时只读日志，不改变模型调用。
 
-## 常驻启动和自动更新
-
-Worker 现在由守护脚本负责生命周期。首次部署时先停止手动启动的 raw worker，再在仓库根目录启动：
+首次部署时先停止手动启动的 raw Worker，再在仓库根目录启动常驻守护脚本：
 
 ```powershell
 .\scripts\run_diffsynth_worker_daemon.ps1 -Port 8765 -PollSeconds 30
 ```
 
-脚本会读取 `remote/worker_mode.txt`，启动现有的模型启动脚本，并保持 Worker 常驻。之后每 30 秒执行一次 `git fetch origin main`：发现新提交后会等待当前生成完成，执行 fast-forward，重新安装必要依赖并重启模型，最后轮询 `/health` 直到新的 `build` 可用。可以把 `-PollSeconds` 改为 `15` 加快更新检查。
+守护脚本每 30 秒拉取 `origin/main`；发现新提交后等待当前任务结束、fast-forward、重启 Worker，并等待 `/health` 恢复。使用 `-PollSeconds 15` 可缩短检查间隔。不要让 raw Worker 和 daemon 同时监听 8765。
 
-守护进程日志位于 `remote\logs\worker-daemon.log`；每次 Worker 启动的 stdout/stderr 位于同目录的带时间戳文件。日志目录已加入 `.gitignore`，不会进入提交。
+守护进程写入 `remote\logs\worker-daemon.log`，每次 Worker 启动的 stdout/stderr 写入同目录的时间戳日志。daemon 自身脚本变更后需要手动重启一次；Worker 代码和 `worker_mode.txt` 的提交会自动部署。
 
-守护脚本的安全行为：工作区有未提交改动时拒绝自动拉取；本地分支与远端分叉时拒绝 reset；更新前等待正在生成的请求；新版本启动健康检查失败时自动回滚到更新前的 clean commit。守护脚本自身变更后需要手动重启一次守护进程，Worker 代码和 `worker_mode.txt` 的后续提交不需要手动重启。
-
-首次启动或调试时仍可直接运行底层脚本：
-
-```powershell
-.\scripts\start_diffsynth_music_server.ps1 -Port 8765
-```
-
-但不要让它和守护脚本同时监听 8765。发生 OOM 时先保留 `/debug/logs` 中的原始阶段和显存数据，再检查是否误改了 `remote/worker_mode.txt` 或关闭了模板 CPU offload。
-
-## 启动后验收
-
-启动后必须检查：
+## 启动验收
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8765/health | ConvertTo-Json
 ```
 
-返回中必须能看到：
+健康结果应包含：
 
 - `status: ok`
-- `offload_mode` 与本次启动参数一致
-- `build` 是刚刚 `git pull` 后的提交短 hash
-- `control: control+prosody`
-- `templates: control, prosody`
-- `device` 是 RTX 5060 Ti
+- `execution: official_model_card`
+- `control: official_template_pipeline`
+- `templates: control, prosody, reference`
+- 当前 `build`
+- RTX 5060 Ti 的 `device`
 
-如果 `/health` 没有 `offload_mode` 或 `build`，说明运行的仍是旧代码，不能继续做性能结论。
+如果健康检查不是 `ok`，先查看 daemon 和本次 Worker 的 stdout/stderr，不要静默切换到其他模型或执行模式。
 
-## 性能日志
+## 生成和日志
 
-生成完成后可读取：
+`POST /v1/generate` 接受音频、英文 prompt、输入时长、seed、CFG、步数和 `control_profile=prosody`。Worker 只传入官方 Prosody template（`model_id=1`），不传入原始音频重绘参数。
+
+生成后可读取：
 
 ```powershell
-Invoke-RestMethod "http://127.0.0.1:8765/debug/logs?since=0&limit=500" | ConvertTo-Json -Depth 12
+Invoke-RestMethod "http://127.0.0.1:8765/debug/logs?since=0&limit=200" | ConvertTo-Json -Depth 12
 ```
 
-日志包含模板正负分支、模板 cache 合并、`CUDA_BEFORE_TEMPLATE`/`CUDA_AFTER_TEMPLATE_*`、Pipeline Unit、模型设备切换、每个 DiT 正负 CFG forward、每个 denoise step、VAE 解码、保存和显存峰值。不要把音频内容、密钥或完整 prompt 写入 Worker 日志。
-
+日志只记录请求、输入解码、条件准备、模型开始/结束、保存、耗时和显存峰值，不记录音频内容、密钥或完整 prompt。

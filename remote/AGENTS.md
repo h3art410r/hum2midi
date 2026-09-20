@@ -5,7 +5,7 @@ This directory is the Windows/CUDA DiffSynth-Music worker. Read `docs/DIFFSYNTH_
 ## One-time deployment
 
 - Pull `origin/main` before the first deployment. Do not start the raw worker and the daemon at the same time.
-- `remote/worker_mode.txt` is the current experiment target. It is currently `cpu`, the validated 16GB-safe path; do not silently switch it to `dit_cuda`.
+- `remote/worker_mode.txt` must remain `official`. The worker follows the official DiffSynth-Music model-card VRAM configuration and TemplatePipeline call; do not add alternate execution modes or custom cache/layer paging logic.
 - Stop any manually launched `start_diffsynth_music_server.ps1` process, then start the resident daemon once:
 
   ```powershell
@@ -28,6 +28,6 @@ This directory is the Windows/CUDA DiffSynth-Music worker. Read `docs/DIFFSYNTH_
 
 ## Runtime and recovery
 
-- Verify `/health` after the first startup and after an automatic redeploy. It must show the expected `offload_mode`, current `build`, `control+prosody`, both templates, and the RTX 5060 Ti.
-- Keep the CPU template paging and `torch.no_grad()` path enabled. If `dit_cuda` is used for an explicit A/B test and OOMs, restore `cpu` in `remote/worker_mode.txt` and report the original phase/logs; do not hide the failure or silently fall back.
+- Verify `/health` after the first startup and after an automatic redeploy. It must show `execution=official_model_card`, `control=prosody`, the current `build`, the official template list, and the RTX 5060 Ti.
+- Do not reintroduce CPU template paging, KV-cache compression, negative-cache aliasing, denoising anchors, or monkey-patched timing wrappers. If the official path fails, report the exact error and logs instead of silently falling back.
 - If the daemon is stopped, do not start the raw worker alongside a stale daemon. Stop the old daemon process first, then start the daemon again.

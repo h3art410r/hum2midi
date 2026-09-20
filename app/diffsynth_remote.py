@@ -72,14 +72,12 @@ class DiffSynthRemoteClient:
         *,
         output_seconds: float | None = None,
         prompt: str | None = None,
-        init_noise_level: float | None = None,
         seed: int | None = None,
-        control_profile: str = "control_prosody",
-        denoising_strength: float | None = None,
+        control_profile: str = "prosody",
         cfg_scale: float | None = None,
         steps: int | None = None,
     ) -> dict[str, object]:
-        del style, init_noise_level
+        del style
         if not source.is_file():
             raise DiffSynthRemoteError(f"Input audio not found: {source}")
         fields = {
@@ -88,8 +86,6 @@ class DiffSynthRemoteClient:
             "seed": str(seed if seed is not None else 101),
             "control": "prosody",
             "control_profile": control_profile,
-            "use_input_audio": str(denoising_strength is not None).lower(),
-            "denoising_strength": "" if denoising_strength is None else str(denoising_strength),
             "cfg_scale": "" if cfg_scale is None else str(cfg_scale),
             "steps": "" if steps is None else str(steps),
         }
@@ -135,14 +131,14 @@ class DiffSynthRemoteClient:
             except Exception as exc:
                 logger.warning("diffsynth_worker_logs_unavailable request_id=%s error=%s", worker_request_id, exc)
         logger.info(
-            "diffsynth_remote_complete url=%s profile=%s cfg=%s steps=%s seed=%s denoise=%s "
+            "diffsynth_remote_complete url=%s profile=%s cfg=%s steps=%s seed=%s "
             "request_seconds=%s response_bytes=%s output_bytes=%s worker=%s",
             self.config.url, control_profile, cfg_scale, steps, seed,
-            denoising_strength, request_seconds, len(response.data), output.stat().st_size, worker_headers,
+            request_seconds, len(response.data), output.stat().st_size, worker_headers,
         )
         return {
             "provider": self.status(),
-            "control": "control+prosody",
+            "control": "prosody",
             "seconds": _wav_seconds(output),
             "requested_seconds": output_seconds,
             "bytes": output.stat().st_size,
@@ -152,7 +148,6 @@ class DiffSynthRemoteClient:
             "requested_cfg_scale": cfg_scale,
             "requested_steps": steps,
             "requested_seed": seed,
-            "requested_denoising_strength": denoising_strength,
             "worker_request_id": worker_headers.get("X-DiffSynth-Request-Id"),
             "worker_conditioning_seconds": _header_float(worker_headers, "X-DiffSynth-Conditioning-Seconds"),
             "worker_inference_seconds": _header_float(worker_headers, "X-DiffSynth-Inference-Seconds"),

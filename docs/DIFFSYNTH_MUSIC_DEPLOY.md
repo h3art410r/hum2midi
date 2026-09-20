@@ -1,31 +1,30 @@
-# DiffSynth-Music Prosody 远端 CUDA 部署
+# DiffSynth-Music 远端 CUDA 部署
 
-本项目现在提供一个明确的远端 provider：当前开发机负责网页和任务编排，5060Ti 16G 的 Windows 机器负责加载 `DiffSynth-Studio/DiffSynth-Music` 并执行 Prosody Control。输入哼唱先提取 prosody 条件，模型直接生成风格化音频；不会把 MIDI 作为中间层，也不会把原始哼唱轨道混回输出。
+开发机运行 FastAPI 和网页，5060 Ti Windows 机器运行常驻 DiffSynth-Music Worker。输入哼唱按官方 Prosody 条件准备，再由官方 `TemplatePipeline` 直接生成完整音频；不使用 MIDI 中间层，也不把原始人声轨混回输出。
 
-## 5060Ti Windows 机器
+## GPU Worker
 
-首次部署时，在仓库根目录 PowerShell 执行常驻守护脚本：
+首次在仓库根目录运行：
 
 ```powershell
 .\scripts\run_diffsynth_worker_daemon.ps1 -Port 8765 -PollSeconds 30
 ```
 
-守护脚本会读取 `remote/worker_mode.txt`，调用底层启动脚本创建 `.venv-diffsynth`、从官方 GitHub checkout DiffSynth-Studio、安装 CUDA 版 PyTorch/torchaudio 和服务依赖，然后启动 `0.0.0.0:8765`。第一次启动会从 ModelScope 下载 `DiffSynth-Studio/DiffSynth-Music`，下载和模型加载可能需要较长时间；守护进程会一直保持运行。之后它每 30 秒 fetch `origin/main`，发现新提交后等待当前任务完成、拉取代码并自动重启 Worker；不需要每次手动部署。需要更快检查时使用 `-PollSeconds 15`。
+daemon 会创建 `.venv-diffsynth`、安装 CUDA 版 PyTorch 和 `remote/requirements.txt`、安装本地 DiffSynth-Studio checkout，并启动 `0.0.0.0:8765`。首次运行会下载 `DiffSynth-Studio/DiffSynth-Music` 权重。后续每 30 秒检查 `origin/main`，自动等待请求结束并部署新提交。不要同时运行 raw Worker 和 daemon。
 
-不要同时运行 `start_diffsynth_music_server.ps1` 和 daemon；底层脚本只用于首次排查或手动恢复。daemon 生命周期和 Worker 输出分别记录在 `remote\logs\worker-daemon.log` 及同目录的时间戳日志中。
+Worker 的执行方式固定为官方模型卡路径，配置文件 `remote/worker_mode.txt` 必须为 `official`。官方低显存配置和模板懒加载由 Worker 代码直接声明，不再有自定义 offload/cache/denoise 分支。
 
-如果 CUDA wheel 不是当前机器合适的版本，可以先设置：
+检查：
 
 ```powershell
-$env:DIFFSYNTH_TORCH_INDEX_URL = "https://download.pytorch.org/whl/cu128"
-$env:DIFFSYNTH_REMOTE_TOKEN = "设置一个仅内网使用的随机 token"
+Invoke-RestMethod http://127.0.0.1:8765/health | ConvertTo-Json
 ```
 
-服务检查：`http://127.0.0.1:8765/health`。不要把未加鉴权的 8765 端口直接暴露到公网；跨机器请使用局域网、VPN 或 SSH 隧道。
+应看到 `status=ok`、`execution=official_model_card`、RTX 5060 Ti 设备名和当前 `build`。
 
-## 当前开发机
+## 开发机
 
-在 `.env` 中显式选择远端 provider：
+`.env` 中选择远端 provider：
 
 ```dotenv
 H2M_AUDIO_PROVIDER=diffsynth_remote
@@ -34,11 +33,8 @@ DIFFSYNTH_REMOTE_TIMEOUT_SECONDS=900
 DIFFSYNTH_REMOTE_TOKEN=与服务端相同的token
 ```
 
-重启当前 FastAPI 服务后，`GET /api/health` 会显示 `runtime: remote-cuda` 和远端设备信息。远端不可用时任务会明确失败并写入后端日志；不会静默回退到 Stable Audio。
+重启 FastAPI 后，`GET /api/health` 会报告远端 Worker 健康状态。远端不可用或官方模型失败时，任务明确失败，不静默回退到 Stable Audio。
 
-## 当前实现边界
+## 请求语义
 
-- 当前 worker 加载 `template_control` 和 `template_prosody`，提供 Control + Prosody 联合条件；`template_reference` 暂不加载。Windows 16GB 机器使用 CPU/offload 配置，模板按 block 分页，两个 cache 在 CPU 合并，模板前向使用 `no_grad()`。
-- 正常路径保留 BF16 KV cache；如果更长输入导致显存压力，可设置 `DIFFSYNTH_QUANTIZE_TEMPLATE_KV=1` 开启按张量 8-bit KV 存储。该选项默认关闭，避免不必要的精度损失。
-- 五个前端方案会依次调用同一个远端 worker，因此首次实验会消耗较长时间；可通过 `DIFFSYNTH_STEPS` 和 `DIFFSYNTH_CFG_SCALE` 调整质量/速度。
-- 5060Ti 16G 已用 10.943 秒真实录音、Control + Prosody、CFG4、steps10 验证稳定运行；服务启动时会检查 CUDA，显存峰值会打印到 worker 日志。
+开发机发送 `prompt`、输入时长、seed、CFG、步数和 `control_profile=prosody`。Worker 只实现官方 `TemplatePipeline` 调用并使用 model 1。旧的 `use_input_audio`、`denoising_strength`、KV-cache 合并和手工分步推理参数已删除。

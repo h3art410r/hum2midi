@@ -1,5 +1,11 @@
 # 当前决策（2026-09-18）
 
+## 2026-09-21：恢复官方 DiffSynth-Music 推理路径
+
+- 用户反馈自定义显存、缓存和重绘逻辑同时影响听感与性能，决定整体回退，不再继续局部打补丁。
+- Worker 已整体重写为官方模型卡的低显存 `ModelConfig`、`vram_limit`、`TemplatePipeline(..., lazy_loading=True)` 和官方 Prosody `model_id=1` 直接模板调用；删除了 denoising anchor、KV cache 合并/量化、模板层分页、负分支复用和 pipeline 内部 monkey-patch。
+- `remote/worker_mode.txt` 改为 `official`。前后端不再发送或展示 `use_input_audio`、`denoising_strength`；步数恢复官方示例默认 50。旧实验数据保留为历史记录，不用于判断新路径。
+
 ## 2026-09-21：0.65 听感过保守，默认改为 0.85
 
 - 用户试听反馈当前默认结果与原始哼唱听感过于接近；后端日志确认不是前端拿错音频，任务 `f480ecbc357c48829b0431e156616f79` 实际使用 `Control + Prosody`、CFG4、steps10、seed101、denoising strength 0.65，并成功生成 9.2 秒输出。

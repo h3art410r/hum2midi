@@ -125,12 +125,10 @@ async def create_generation(request: Request) -> JSONResponse:
 
     filename = request.headers.get("x-audio-filename", "hum.m4a")
     requested_preset = request.headers.get("x-style-preset", "").strip()
-    control_profile = request.headers.get("x-diffsynth-control-profile", "control_prosody").strip()
+    control_profile = request.headers.get("x-diffsynth-control-profile", "prosody").strip()
     cfg_scale = request.headers.get("x-diffsynth-cfg-scale", "4").strip()
-    steps = request.headers.get("x-diffsynth-steps", "10").strip()
+    steps = request.headers.get("x-diffsynth-steps", "50").strip()
     seed = request.headers.get("x-diffsynth-seed", "101").strip()
-    denoising_strength_raw = request.headers.get("x-diffsynth-denoising-strength", "0.85").strip()
-    denoising_strength = "" if denoising_strength_raw.lower() in {"off", "none", "disabled", "null"} else denoising_strength_raw
     if requested_preset:
         _backend_log(
             f"legacy preset header ignored; generating the Funk plan requested={requested_preset}",
@@ -153,8 +151,7 @@ async def create_generation(request: Request) -> JSONResponse:
     raw_path = job_dir / f"source{suffix}"
     raw_path.write_bytes(audio)
     _backend_log(
-        f"runtime parameters profile={control_profile} cfg={cfg_scale} steps={steps} "
-        f"seed={seed} denoising_strength={denoising_strength}",
+        f"runtime parameters profile={control_profile} cfg={cfg_scale} steps={steps} seed={seed}",
         job_id=job_id,
     )
     _backend_log("normalizing input with ffmpeg", job_id=job_id)
@@ -175,7 +172,6 @@ async def create_generation(request: Request) -> JSONResponse:
         "cfg_scale": cfg_scale,
         "steps": steps,
         "seed": seed,
-        "denoising_strength": denoising_strength,
         "plans": [
             {"id": plan_id, "name": plan["name"], "description": plan["description"], "noise": plan["noise"]}
             for plan_id, plan in PROMPT_PLANS.items()
@@ -201,7 +197,6 @@ async def create_generation(request: Request) -> JSONResponse:
             "cfg_scale": cfg_scale,
             "steps": steps,
             "seed": seed,
-            "denoising_strength": denoising_strength,
         },
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     asyncio.create_task(_run_generation(job_id, source_path, job_dir))
@@ -299,15 +294,14 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
             _backend_log(
                 f"generation started plan={plan_id} name={plan['name']} noise={plan['noise']} "
                 f"profile={job.get('control_profile')} cfg={job.get('cfg_scale')} "
-                f"steps={job.get('steps')} seed={job.get('seed')} "
-                f"denoising_strength={job.get('denoising_strength')}",
+                f"steps={job.get('steps')} seed={job.get('seed')}",
                 job_id=job_id,
             )
             logger.info(
-                "audio_provider_start job=%s plan=%s noise=%s provider=%s profile=%s cfg=%s steps=%s seed=%s denoise=%s",
+                "audio_provider_start job=%s plan=%s noise=%s provider=%s profile=%s cfg=%s steps=%s seed=%s",
                 job_id, plan_id, plan["noise"], provider.status(),
                 job.get("control_profile"), job.get("cfg_scale"), job.get("steps"),
-                job.get("seed"), job.get("denoising_strength"),
+                job.get("seed"),
             )
             output_path = job_dir / f"{variant_id}.wav"
             render_started = time.perf_counter()
@@ -320,15 +314,15 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
                 render_kwargs = {
                     "output_seconds": input_seconds,
                     "prompt": plan["prompt"],
-                    "init_noise_level": plan["noise"],
                 }
+                if isinstance(provider, StableAudioClient):
+                    render_kwargs["init_noise_level"] = plan["noise"]
                 if isinstance(provider, DiffSynthRemoteClient):
-                    profile = job.get("control_profile", "control_prosody")
+                    profile = job.get("control_profile", "prosody")
                     render_kwargs.update({
                         "control_profile": profile,
-                        "denoising_strength": float(job.get("denoising_strength", "0.85")) if job.get("denoising_strength") else None,
                         "cfg_scale": float(job.get("cfg_scale", "4")),
-                        "steps": int(job.get("steps", "10")),
+                        "steps": int(job.get("steps", "50")),
                         "seed": int(job.get("seed", "101")),
                     })
                 diagnostics = await asyncio.to_thread(provider.render, audio_path, "transform", output_path, **render_kwargs)
@@ -352,13 +346,8 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
             diagnostics.setdefault("elapsed_seconds", round(render_elapsed, 3))
             diagnostics.setdefault("requested_profile", job.get("control_profile"))
             diagnostics.setdefault("requested_cfg_scale", float(job.get("cfg_scale", "4")))
-            diagnostics.setdefault("requested_steps", int(job.get("steps", "10")))
+            diagnostics.setdefault("requested_steps", int(job.get("steps", "50")))
             diagnostics.setdefault("requested_seed", int(job.get("seed", "101")))
-            requested_denoise = job.get("denoising_strength")
-            diagnostics.setdefault(
-                "requested_denoising_strength",
-                float(requested_denoise) if requested_denoise else None,
-            )
             job["variants"][variant_id] = {
                 "plan": plan_id,
                 "plan_name": plan["name"],

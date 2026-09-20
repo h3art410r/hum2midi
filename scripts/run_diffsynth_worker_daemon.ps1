@@ -148,7 +148,7 @@ function Start-OwnedWorker {
     }
     if (Test-WorkerHealthy) {
       $health = Invoke-RestMethod -Uri "$WorkerUrl/health" -TimeoutSec 5
-      Write-DaemonLog "worker healthy build=$($health.build) mode=$($health.offload_mode) device=$($health.device)"
+      Write-DaemonLog "worker healthy build=$($health.build) execution=$($health.execution) device=$($health.device)"
       return
     }
     Start-Sleep -Seconds 5
