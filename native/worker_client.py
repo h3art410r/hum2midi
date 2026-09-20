@@ -55,6 +55,7 @@ class NativeWorkerClient:
         seed: int,
         cfg_scale: float,
         steps: int,
+        control: str = "prosody_control",
     ) -> dict[str, object]:
         if not source.is_file():
             raise WorkerError(f"Input audio not found: {source}")
@@ -63,7 +64,7 @@ class NativeWorkerClient:
             "seed": str(seed),
             "cfg_scale": str(cfg_scale),
             "steps": str(steps),
-            "control": "prosody",
+            "control": control,
         }
         body, content_type = _multipart(
             fields,
@@ -115,6 +116,7 @@ class NativeWorkerClient:
             "x-diffsynth-peak-reserved-gb",
             "x-diffsynth-model-version",
             "x-diffsynth-negative-prompt-source",
+            "x-diffsynth-control",
         ):
             if headers.get(key):
                 diagnostics[key.removeprefix("x-diffsynth-").replace("-", "_")] = headers[key]

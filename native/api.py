@@ -41,6 +41,7 @@ MAX_UPLOAD = max(1, int(os.getenv("NATIVE_MAX_UPLOAD_MB", "20"))) * 1024 * 1024
 SEED = int(os.getenv("NATIVE_SEED", "42"))
 CFG_SCALE = float(os.getenv("NATIVE_CFG_SCALE", "4"))
 STEPS = max(1, int(os.getenv("NATIVE_STEPS", "50")))
+CONTROL = os.getenv("NATIVE_CONTROL", "prosody_control")
 
 app = FastAPI(title="Hum2Midi Native Demo")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
@@ -125,7 +126,7 @@ async def prompt_presets() -> dict[str, Any]:
             {"id": key, **value, "negative_prompt_source": "worker.pipe.default_negative_prompt"}
             for key, value in styles.items()
         ],
-        "parameters": {"seed": SEED, "cfg_scale": CFG_SCALE, "steps": STEPS, "control": "prosody"},
+        "parameters": {"seed": SEED, "cfg_scale": CFG_SCALE, "steps": STEPS, "control": CONTROL},
     }
 
 
@@ -161,7 +162,7 @@ async def create_generation(request: Request) -> JSONResponse:
         "source_sha256": hashlib.sha256(body).hexdigest(),
         "input_seconds": input_seconds,
         "provider": "DiffSynth-Music Prosody",
-        "parameters": {"seed": SEED, "cfg_scale": CFG_SCALE, "steps": STEPS, "control": "prosody"},
+        "parameters": {"seed": SEED, "cfg_scale": CFG_SCALE, "steps": STEPS, "control": CONTROL},
         "styles": prompt_data,
         "variants": {
             style: {
@@ -238,6 +239,7 @@ async def _run_generation(job_id: str) -> None:
                         seed=SEED,
                         cfg_scale=CFG_SCALE,
                         steps=STEPS,
+                        control=CONTROL,
                     )
                     variant.update(
                         {

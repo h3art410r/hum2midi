@@ -181,7 +181,8 @@ def health() -> dict[str, object]:
     return {
         "status": "ok" if MODEL_READY else "starting",
         "provider": "DiffSynth-Music",
-        "control": "prosody",
+        "control": os.getenv("NATIVE_DEFAULT_CONTROL", "prosody_control"),
+        "supported_controls": ["prosody", "control", "prosody_control"],
         "execution": "official_prosody_quick_start",
         "model_id": MODEL_ID,
         "build": BUILD,
@@ -216,8 +217,8 @@ def generate(
     started = time.perf_counter()
     if TOKEN and authorization != f"Bearer {TOKEN}":
         raise HTTPException(401, "Invalid worker token")
-    if control != "prosody":
-        raise HTTPException(400, "Native Worker only supports official Prosody conditioning")
+    if control not in {"prosody", "control", "prosody_control"}:
+        raise HTTPException(400, "Native Worker supports prosody, control, and prosody_control conditioning")
     if not prompt.strip():
         raise HTTPException(400, "Prompt is required")
     if not GENERATION_LOCK.acquire(blocking=False):
@@ -245,12 +246,45 @@ def generate(
         prosody = extract_prosody(waveform)
         duration = prosody.shape[1] / 48000
         conditioning_elapsed = time.perf_counter() - conditioning_started
-        _log("PROSODY_READY", request_id, waveform_shape=tuple(waveform.shape), prosody_shape=tuple(prosody.shape), duration=f"{duration:.3f}s", elapsed=f"{conditioning_elapsed:.3f}s")
+        _log(
+            "CONDITIONS_READY",
+            request_id,
+            control=control,
+            waveform_shape=tuple(waveform.shape),
+            prosody_shape=tuple(prosody.shape),
+            duration=f"{duration:.3f}s",
+            elapsed=f"{conditioning_elapsed:.3f}s",
+        )
         if torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
             torch.cuda.synchronize()
         infer_started = time.perf_counter()
-        _log("MODEL_INFER_START", request_id, execution="official_template_pipeline", model_id=1)
+        if control == "prosody":
+            template_inputs = [{"model_id": 1, "audio": prosody}]
+            negative_template_inputs = [{"model_id": 1, "audio": prosody}]
+        elif control == "control":
+            template_inputs = [{"model_id": 0, "audio": waveform}]
+            negative_template_inputs = [{"model_id": 0, "audio": waveform}]
+        else:
+            # The paper describes joint conditioning as concatenating the
+            # independently encoded Control and Prosody KV memories. Keep the
+            # same conditions on the negative CFG branch, as the official
+            # single-condition examples do, so only text guidance differs.
+            template_inputs = [
+                {"model_id": 0, "audio": waveform},
+                {"model_id": 1, "audio": prosody},
+            ]
+            negative_template_inputs = [
+                {"model_id": 0, "audio": waveform},
+                {"model_id": 1, "audio": prosody},
+            ]
+        _log(
+            "MODEL_INFER_START",
+            request_id,
+            execution="official_template_pipeline",
+            control=control,
+            template_models=','.join(str(item["model_id"]) for item in template_inputs),
+        )
         result = TEMPLATE(
             PIPE,
             prompt=prompt,
@@ -261,8 +295,8 @@ def generate(
             tiled=True,
             cfg_scale=cfg_scale,
             num_inference_steps=steps,
-            template_inputs=[{"model_id": 1, "audio": prosody}],
-            negative_template_inputs=[{"model_id": 1, "audio": prosody}],
+            template_inputs=template_inputs,
+            negative_template_inputs=negative_template_inputs,
         )
         if torch.cuda.is_available():
             torch.cuda.synchronize()
@@ -282,6 +316,7 @@ def generate(
             headers={
                 "X-DiffSynth-Request-Id": request_id,
                 "X-DiffSynth-Model-Version": MODEL_ID,
+                "X-DiffSynth-Control": control,
                 "X-DiffSynth-Negative-Prompt-Source": "pipe.default_negative_prompt",
                 "X-DiffSynth-Conditioning-Seconds": f"{conditioning_elapsed:.3f}",
                 "X-DiffSynth-Inference-Seconds": f"{infer_elapsed:.3f}",
