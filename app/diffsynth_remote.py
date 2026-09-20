@@ -10,6 +10,7 @@ import urllib.request
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ class DiffSynthRemoteError(RuntimeError):
 class _Response:
     status: int
     data: bytes
+    headers: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -105,11 +107,36 @@ class DiffSynthRemoteClient:
         if not output.stat().st_size:
             raise DiffSynthRemoteError("DiffSynth worker returned an empty audio file")
         request_seconds = round(time.perf_counter() - request_started, 3)
+        worker_headers = {
+            key: response.headers.get(key, "")
+            for key in (
+                "X-DiffSynth-Request-Id",
+                "X-DiffSynth-Conditioning-Seconds",
+                "X-DiffSynth-Inference-Seconds",
+                "X-DiffSynth-Save-Seconds",
+                "X-DiffSynth-Total-Seconds",
+                "X-DiffSynth-Peak-Allocated-GB",
+                "X-DiffSynth-Peak-Reserved-GB",
+            )
+            if response.headers.get(key)
+        }
+        worker_logs: list[dict[str, object]] = []
+        worker_request_id = worker_headers.get("X-DiffSynth-Request-Id")
+        if worker_request_id:
+            try:
+                logs_response = self._request(
+                    "GET",
+                    f"/debug/logs?request_id={quote(worker_request_id, safe='')}&limit=200",
+                )
+                if isinstance(logs_response, dict) and isinstance(logs_response.get("logs"), list):
+                    worker_logs = logs_response["logs"]
+            except Exception as exc:
+                logger.warning("diffsynth_worker_logs_unavailable request_id=%s error=%s", worker_request_id, exc)
         logger.info(
             "diffsynth_remote_complete url=%s profile=%s cfg=%s steps=%s seed=%s denoise=%s "
-            "request_seconds=%s response_bytes=%s output_bytes=%s",
+            "request_seconds=%s response_bytes=%s output_bytes=%s worker=%s",
             self.config.url, control_profile, cfg_scale, steps, seed,
-            denoising_strength, request_seconds, len(response.data), output.stat().st_size,
+            denoising_strength, request_seconds, len(response.data), output.stat().st_size, worker_headers,
         )
         return {
             "provider": self.status(),
@@ -124,6 +151,14 @@ class DiffSynthRemoteClient:
             "requested_steps": steps,
             "requested_seed": seed,
             "requested_denoising_strength": denoising_strength,
+            "worker_request_id": worker_headers.get("X-DiffSynth-Request-Id"),
+            "worker_conditioning_seconds": _header_float(worker_headers, "X-DiffSynth-Conditioning-Seconds"),
+            "worker_inference_seconds": _header_float(worker_headers, "X-DiffSynth-Inference-Seconds"),
+            "worker_save_seconds": _header_float(worker_headers, "X-DiffSynth-Save-Seconds"),
+            "worker_total_seconds": _header_float(worker_headers, "X-DiffSynth-Total-Seconds"),
+            "worker_peak_allocated_gb": _header_float(worker_headers, "X-DiffSynth-Peak-Allocated-GB"),
+            "worker_peak_reserved_gb": _header_float(worker_headers, "X-DiffSynth-Peak-Reserved-GB"),
+            "worker_logs": worker_logs,
         }
 
     def _request(self, method: str, path: str) -> object:
@@ -140,7 +175,7 @@ class DiffSynthRemoteClient:
         request = urllib.request.Request(self.config.url + path, data=body or None, headers=headers, method=method)
         try:
             with urllib.request.urlopen(request, timeout=self.config.timeout_seconds) as response:
-                return _Response(response.status, response.read())
+                return _Response(response.status, response.read(), dict(response.headers.items()))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[-1200:]
             raise DiffSynthRemoteError(f"DiffSynth worker HTTP {exc.code}: {detail}") from exc
@@ -163,4 +198,12 @@ def _wav_seconds(path: Path) -> float | None:
         with wave.open(str(path), "rb") as handle:
             return round(handle.getnframes() / handle.getframerate(), 3)
     except (OSError, wave.Error, ZeroDivisionError):
+        return None
+
+
+def _header_float(headers: dict[str, str], name: str) -> float | None:
+    value = headers.get(name, "")
+    try:
+        return round(float(value), 3) if value else None
+    except ValueError:
         return None

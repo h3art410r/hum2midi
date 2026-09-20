@@ -369,6 +369,21 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
                 **diagnostics,
             }
             completed_variants += 1
+            worker_logs = diagnostics.get("worker_logs")
+            if isinstance(worker_logs, list):
+                for event in worker_logs:
+                    if not isinstance(event, dict):
+                        continue
+                    event_name = event.get("event", "event")
+                    event_fields = event.get("fields", {})
+                    if isinstance(event_fields, dict):
+                        fields_text = " ".join(f"{key}={value}" for key, value in event_fields.items())
+                    else:
+                        fields_text = str(event_fields)
+                    _backend_log(
+                        f"worker.{event_name} {fields_text}".rstrip(),
+                        job_id=job_id,
+                    )
             _backend_log(
                 f"provider.render done plan={plan_id} elapsed={render_elapsed:.3f}s "
                 f"output_seconds={diagnostics.get('seconds')} bytes={diagnostics.get('bytes')} "

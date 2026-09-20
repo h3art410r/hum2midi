@@ -8,10 +8,12 @@ with scripts/start_diffsynth_music_server.ps1.
 from __future__ import annotations
 
 import os
+import inspect
 import tempfile
 import time
 import traceback
 import uuid
+from collections import deque
 from pathlib import Path
 
 import torch
@@ -36,16 +38,164 @@ WORK_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="DiffSynth-Music Prosody Worker")
 PIPE = None
 TEMPLATE = None
+WORKER_LOGS: deque[dict[str, object]] = deque(maxlen=1000)
+WORKER_LOG_SEQ = 0
 
 
 def _worker_log(event: str, request_id: str | None = None, **fields: object) -> None:
     """Emit compact, grep-friendly timings for the remote worker console."""
+    global WORKER_LOG_SEQ
+    WORKER_LOG_SEQ += 1
     stamp = time.strftime("%H:%M:%S")
     prefix = f"[DIFFSYNTH] {stamp} {event}"
     if request_id:
         prefix += f" request={request_id}"
     details = " ".join(f"{key}={value}" for key, value in fields.items())
     print(f"{prefix} {details}".rstrip(), flush=True)
+    WORKER_LOGS.append({
+        "seq": WORKER_LOG_SEQ,
+        "time": stamp,
+        "event": event,
+        "request_id": request_id,
+        "fields": {key: str(value) for key, value in fields.items()},
+    })
+
+
+def _render_with_timings(
+    *,
+    request_id: str,
+    prompt: str,
+    negative_prompt: str,
+    lyrics: str,
+    duration: float,
+    seed: int,
+    cfg_scale: float,
+    steps: int,
+    control_audio: torch.Tensor,
+    prosody: torch.Tensor,
+    input_audio: torch.Tensor | None,
+    denoising_strength: float,
+    control_profile: str,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    """Run the official template/pipeline flow while exposing its phases.
+
+    This mirrors TemplatePipeline.__call__ instead of changing DiffSynth itself.
+    It keeps the exact model inputs while timing template conditioning, each
+    pipeline unit, every denoise step, and VAE decode separately.
+    """
+    timings: dict[str, float] = {}
+    template_inputs = (
+        [{"model_id": 0, "audio": control_audio}, {"model_id": 1, "audio": prosody}]
+        if control_profile != "prosody"
+        else [{"model_id": 1, "audio": prosody}]
+    )
+    negative_template_inputs = (
+        [{"model_id": 0, "audio": control_audio}, {"model_id": 1, "audio": prosody}]
+        if control_profile != "prosody"
+        else [{"model_id": 1, "audio": prosody}]
+    )
+
+    started = time.perf_counter()
+    template_cache = TEMPLATE.call_single_side(pipe=PIPE, inputs=template_inputs)
+    timings["template_positive_seconds"] = time.perf_counter() - started
+    _worker_log(
+        "TEMPLATE_POSITIVE_DONE", request_id,
+        elapsed=f"{timings['template_positive_seconds']:.3f}s",
+        keys=sorted(template_cache),
+    )
+    started = time.perf_counter()
+    negative_template_cache = TEMPLATE.call_single_side(pipe=PIPE, inputs=negative_template_inputs)
+    timings["template_negative_seconds"] = time.perf_counter() - started
+    _worker_log(
+        "TEMPLATE_NEGATIVE_DONE", request_id,
+        elapsed=f"{timings['template_negative_seconds']:.3f}s",
+        keys=sorted(negative_template_cache),
+    )
+
+    kwargs: dict[str, object] = {
+        "prompt": prompt,
+        "negative_prompt": negative_prompt,
+        "lyrics": lyrics,
+        "duration": duration,
+        "seed": seed,
+        "tiled": True,
+        "cfg_scale": cfg_scale,
+        "num_inference_steps": steps,
+        "input_audio": input_audio,
+        "denoising_strength": denoising_strength,
+    }
+    required_params = set(inspect.signature(PIPE.__call__).parameters)
+    for param, value in template_cache.items():
+        if param in required_params:
+            kwargs[param] = value
+    for param, value in negative_template_cache.items():
+        negative_name = "negative_" + param
+        if negative_name in required_params:
+            kwargs[negative_name] = value
+    _worker_log(
+        "PIPE_INPUTS_READY", request_id,
+        kwargs=sorted(kwargs),
+        input_audio="yes" if input_audio is not None else "no",
+    )
+
+    original_unit_runner = PIPE.unit_runner
+    original_vae_decode = PIPE.vae_output_to_audio
+
+    def timed_unit_runner(unit, *args, **unit_kwargs):
+        unit_started = time.perf_counter()
+        result = original_unit_runner(unit, *args, **unit_kwargs)
+        elapsed = time.perf_counter() - unit_started
+        name = type(unit).__name__
+        timings[f"unit_{name}_seconds"] = elapsed
+        _worker_log("PIPE_UNIT_DONE", request_id, unit=name, elapsed=f"{elapsed:.3f}s")
+        return result
+
+    def timed_vae_decode(*args, **decode_kwargs):
+        decode_started = time.perf_counter()
+        result = original_vae_decode(*args, **decode_kwargs)
+        elapsed = time.perf_counter() - decode_started
+        timings["vae_decode_seconds"] = elapsed
+        _worker_log("VAE_DECODE_DONE", request_id, elapsed=f"{elapsed:.3f}s", shape=tuple(result.shape))
+        return result
+
+    def timed_progress(iterable):
+        iterator = iter(iterable)
+        step_index = 0
+        previous = time.perf_counter()
+        while True:
+            try:
+                timestep = next(iterator)
+            except StopIteration:
+                break
+            now = time.perf_counter()
+            if step_index:
+                elapsed = now - previous
+                timings[f"denoise_step_{step_index}_seconds"] = elapsed
+                _worker_log("DENOISE_STEP_DONE", request_id, step=step_index, elapsed=f"{elapsed:.3f}s")
+            yield timestep
+            previous = time.perf_counter()
+            step_index += 1
+        if step_index:
+            elapsed = time.perf_counter() - previous
+            timings[f"denoise_step_{step_index}_seconds"] = elapsed
+            _worker_log("DENOISE_STEP_DONE", request_id, step=step_index, elapsed=f"{elapsed:.3f}s")
+
+    kwargs["progress_bar_cmd"] = timed_progress
+    PIPE.unit_runner = timed_unit_runner
+    PIPE.vae_output_to_audio = timed_vae_decode
+    try:
+        model_started = time.perf_counter()
+        result = PIPE(**kwargs)
+        timings["pipe_total_seconds"] = time.perf_counter() - model_started
+    finally:
+        PIPE.unit_runner = original_unit_runner
+        PIPE.vae_output_to_audio = original_vae_decode
+    _worker_log(
+        "PIPE_DONE", request_id,
+        elapsed=f"{timings['pipe_total_seconds']:.3f}s",
+        phases=sorted(timings),
+    )
+    return result, timings
 
 
 def _configs():
@@ -137,6 +287,17 @@ def health() -> dict[str, object]:
         "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none",
         "model_id": MODEL_ID,
     }
+
+
+@app.get("/debug/logs")
+def debug_logs(since: int = 0, limit: int = 200, request_id: str = "") -> dict[str, object]:
+    """Return recent worker timing events without exposing prompts or audio."""
+    limit = max(1, min(limit, 500))
+    events = [
+        entry for entry in WORKER_LOGS
+        if int(entry["seq"]) > since and (not request_id or entry.get("request_id") == request_id)
+    ]
+    return {"cursor": WORKER_LOG_SEQ, "logs": events[-limit:]}
 
 
 @app.post("/v1/generate")
@@ -239,30 +400,20 @@ async def generate(
             steps=int(steps) if steps.strip() else int(os.getenv("DIFFSYNTH_STEPS", "10")),
             templates="control,prosody" if control_profile != "prosody" else "prosody",
         )
-        result = TEMPLATE(
-            PIPE,
+        result, phase_timings = _render_with_timings(
+            request_id=request_id,
             prompt=prompt,
             negative_prompt=PIPE.default_negative_prompt,
             lyrics="",
             duration=seconds,
             seed=seed,
-            tiled=True,
             cfg_scale=float(cfg_scale) if cfg_scale.strip() else float(os.getenv("DIFFSYNTH_CFG_SCALE", "4")),
-            num_inference_steps=int(steps) if steps.strip() else int(os.getenv("DIFFSYNTH_STEPS", "10")),
-            # Template model IDs follow the official DiffSynth-Music layout:
-            # 0 = Control (vocal onset/rhythm), 1 = Prosody (pitch/timing).
-            template_inputs=(
-                [{"model_id": 0, "audio": control_audio}, {"model_id": 1, "audio": prosody}]
-                if control_profile != "prosody"
-                else [{"model_id": 1, "audio": prosody}]
-            ),
-            negative_template_inputs=(
-                [{"model_id": 0, "audio": control_audio}, {"model_id": 1, "audio": prosody}]
-                if control_profile != "prosody"
-                else [{"model_id": 1, "audio": prosody}]
-            ),
+            steps=int(steps) if steps.strip() else int(os.getenv("DIFFSYNTH_STEPS", "10")),
+            control_audio=control_audio,
+            prosody=prosody,
             input_audio=control_audio if denoise is not None else None,
             denoising_strength=denoise if denoise is not None else 1.0,
+            control_profile=control_profile,
         )
         if torch.cuda.is_available():
             torch.cuda.synchronize()
@@ -276,18 +427,35 @@ async def generate(
             result_shape=tuple(result.shape),
             peak_allocated_gb=f"{peak_allocated:.2f}",
             peak_reserved_gb=f"{peak_reserved:.2f}",
+            pipe_seconds=f"{phase_timings.get('pipe_total_seconds', 0.0):.3f}",
+            vae_decode_seconds=f"{phase_timings.get('vae_decode_seconds', 0.0):.3f}",
         )
         # Avoid torchaudio.save -> TorchCodec on newer torchaudio builds.
         save_started = time.perf_counter()
         sf.write(str(output_path), result.detach().float().cpu().numpy().T, 48000, subtype="PCM_16")
+        save_elapsed = time.perf_counter() - save_started
         _worker_log(
             "AUDIO_SAVE_DONE",
             request_id,
             bytes=output_path.stat().st_size,
-            elapsed=f"{time.perf_counter() - save_started:.3f}s",
+            elapsed=f"{save_elapsed:.3f}s",
             total=f"{time.perf_counter() - request_started:.3f}s",
         )
-        return FileResponse(output_path, media_type="audio/wav", filename="diffsynth-output.wav")
+        total_elapsed = time.perf_counter() - request_started
+        return FileResponse(
+            output_path,
+            media_type="audio/wav",
+            filename="diffsynth-output.wav",
+            headers={
+                "X-DiffSynth-Request-Id": request_id,
+                "X-DiffSynth-Conditioning-Seconds": f"{time.perf_counter() - prep_started:.3f}",
+                "X-DiffSynth-Inference-Seconds": f"{infer_elapsed:.3f}",
+                "X-DiffSynth-Save-Seconds": f"{save_elapsed:.3f}",
+                "X-DiffSynth-Total-Seconds": f"{total_elapsed:.3f}",
+                "X-DiffSynth-Peak-Allocated-GB": f"{peak_allocated:.3f}",
+                "X-DiffSynth-Peak-Reserved-GB": f"{peak_reserved:.3f}",
+            },
+        )
     except Exception as exc:
         _worker_log(
             "REQUEST_ERROR",
