@@ -5,6 +5,7 @@
 - 同一段 10.943 秒录音在 Control + Prosody、CFG 4、steps 10 下，开发机侧确认上传与 ffmpeg 约 0.38 秒；Worker 请求分别为重绘锚点开启 153.318 秒、关闭 125.613 秒，输出均为约 10.96 秒。瓶颈在 GPU Worker 模型执行，不在公网、反向隧道或本地转码。
 - `6a96d12` 为 Worker 追加了只读 `/debug/logs`，并把模板正/负分支、每个 Pipeline Unit、每个 denoise step、VAE decode、保存和显存峰值记录到内存日志；响应头和后端任务状态会携带对应阶段数据。Worker 拉取该提交并重启后才会生效。
 - 该埋点通过镜像 `TemplatePipeline.__call__` 的输入合并逻辑保持模型调用语义不变，只增加计时，不改变默认 Control + Prosody、steps 10、denoising strength 0.65。
+- Worker 支持显式 `DIFFSYNTH_OFFLOAD_MODE=cpu|dit_cuda|none`：`cpu` 保持 16G 显存下的安全路径；`dit_cuda` 让 DiT 尽量常驻 CUDA 做速度 A/B，可能 OOM；`none` 完全关闭 VRAM 管理，仅用于确认显存上限。默认值仍为 `cpu`，不会自动切换。
 
 ## 2026-09-20：单 Funk 快速性能基线
 
