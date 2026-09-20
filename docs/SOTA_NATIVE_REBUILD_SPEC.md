@@ -176,6 +176,19 @@ soft bass, subtle texture, and a memorable arrangement.
 
 后续只允许一次修改一个变量：prompt、seed、CFG、步数、音频条件强度或输入预处理。每个实验都要保存输入和输出，不能凭印象混合比较。
 
+## 6.2 首个可运行实现映射
+
+本方案的首个独立实现已经落在 `native/`：
+
+- `native/api.py`：上传、规范化、任务持久化、状态轮询和两个变体的先出先展示；
+- `native/worker_client.py`：只负责调用 GPU Worker 的小型 HTTP 适配；
+- `native/worker_server.py`：官方 Prosody Quick Start 的 GPU 进程，不引用历史 `app/`；
+- `native/prompts.py`：Funk 与 Lo-fi 的项目正向 prompt 及中文参考译文；
+- `native/static/index.html`：手机优先页面和 `?debug=16x9` 桌面调试视图；
+- `scripts/run_diffsynth_worker_daemon.ps1`：常驻守护进程现在启动 `native.worker_server:app`，并在主分支更新后自动重启模型子进程。
+
+这一步先按官方基线顺序生成两个风格，不启用 Control、Reference、联合条件或自定义 KV cache。共享 Prosody 条件的进一步缓存只有在官方接口和固定录音 A/B 证明不改变效果后才进入后续实验。
+
 ### 6.1 负向 Prompt 的来源与生成规则
 
 `negative_prompt` 不由另一个大模型现场改写，也不根据 Funk 或 Lo-fi 的名称随意编写。官方 DiffSynth-Music Quick Start 直接使用 `pipe.default_negative_prompt`；它是随模型代码提供的稳定基线，服务于文本条件的 classifier-free guidance（CFG）负向分支。新后端必须在 Worker 启动时从已加载的 pipeline 读取这个值，并把实际发送的文本和模型版本写入任务诊断，不能把它硬编码成一段可能过期的副本。官方没有对应风格的正向默认值，正向风格词必须单独标记为项目配置。

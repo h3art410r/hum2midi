@@ -11,7 +11,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$StartScript = Join-Path $RepoRoot "scripts\start_diffsynth_music_server.ps1"
+$StartScript = Join-Path $RepoRoot "scripts\start_native_diffsynth_worker.ps1"
 $LogDir = Join-Path $RepoRoot "remote\logs"
 $DaemonLog = Join-Path $LogDir "worker-daemon.log"
 $WorkerUrl = "http://127.0.0.1:$Port"
