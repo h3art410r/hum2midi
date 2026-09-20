@@ -58,6 +58,10 @@ TEMPLATE_LAYER_CPU_OFFLOAD = os.getenv(
     "DIFFSYNTH_TEMPLATE_LAYER_CPU_OFFLOAD",
     "1" if OFFLOAD_MODE == "cpu" else "0",
 ).strip().lower() not in {"0", "false", "no", "off"}
+QUANTIZE_TEMPLATE_KV = os.getenv(
+    "DIFFSYNTH_QUANTIZE_TEMPLATE_KV",
+    "1" if OFFLOAD_MODE == "cpu" else "0",
+).strip().lower() not in {"0", "false", "no", "off"}
 
 app = FastAPI(title="DiffSynth-Music Prosody Worker")
 PIPE = None
@@ -139,6 +143,40 @@ def _move_template_cache(value: object, device: str) -> object:
     if isinstance(value, dict):
         return {key: _move_template_cache(item, device) for key, item in value.items()}
     return value
+
+
+class _QuantizedKVCache:
+    """CPU/GPU resident uint8 KV cache with per-tensor BF16 dequantization."""
+
+    def __init__(self, cache: dict[str, tuple[torch.Tensor, torch.Tensor]]):
+        self._entries: dict[str, tuple[tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]]] = {}
+        for key, (k, v) in cache.items():
+            self._entries[key] = (self._quantize(k), self._quantize(v))
+
+    @staticmethod
+    def _quantize(value: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        value = value.float()
+        scale = value.abs().amax().clamp_min(1e-8) / 127.0
+        quantized = torch.clamp(torch.round(value / scale) + 128.0, 0.0, 255.0).to(torch.uint8)
+        return quantized.cpu(), scale.float().cpu()
+
+    @staticmethod
+    def _dequantize(value: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        quantized, scale = value
+        return (quantized.to(device="cuda", dtype=torch.float32) - 128.0).mul(
+            scale.to(device="cuda", dtype=torch.float32)
+        ).to(dtype=torch.bfloat16)
+
+    def get(self, key: str, default=None):
+        value = self._entries.get(key)
+        if value is None:
+            return default
+        # Do not cache the decompressed value: the DiT consumes blocks in
+        # order, and retaining them would recreate the original VRAM spike.
+        return self._dequantize(value[0]), self._dequantize(value[1])
+
+    def __len__(self) -> int:
+        return len(self._entries)
 
 
 class _TemplateLayerCPUWrapper(torch.nn.Module):
@@ -250,7 +288,14 @@ def _render_with_timings(
         prosody_cache = _move_template_cache(prosody_cache, "cpu")
         _release_temporary_cuda_memory()
         merged_cache = TEMPLATE.merge_template_cache([control_cache, prosody_cache])
-        template_cache = _move_template_cache(merged_cache, "cuda")
+        if QUANTIZE_TEMPLATE_KV and "kv_cache" in merged_cache:
+            template_cache = {
+                **merged_cache,
+                "kv_cache": _QuantizedKVCache(merged_cache["kv_cache"]),
+            }
+            _worker_log("TEMPLATE_KV_QUANTIZED", request_id, blocks=len(template_cache["kv_cache"]))
+        else:
+            template_cache = _move_template_cache(merged_cache, "cuda")
         del control_cache, prosody_cache, merged_cache
     else:
         template_cache = TEMPLATE.call_single_side(pipe=PIPE, inputs=template_inputs)
@@ -536,6 +581,7 @@ def load_models() -> None:
         template_lazy_loading=TEMPLATE_LAZY_LOADING,
         reuse_template_cache=REUSE_IDENTICAL_TEMPLATE_CACHE,
         template_layer_cpu_offload=TEMPLATE_LAYER_CPU_OFFLOAD,
+        quantize_template_kv=QUANTIZE_TEMPLATE_KV,
         offload_mode=OFFLOAD_MODE,
     )
 
