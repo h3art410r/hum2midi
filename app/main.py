@@ -154,7 +154,7 @@ async def create_generation(request: Request) -> JSONResponse:
         "message": "正在准备音乐模型生成…",
         "provider": _make_provider().status(),
         "plan": "all",
-        "plan_name": "全部五种方案",
+        "plan_name": "Funk 和 Lo-fi",
         "plans": [
             {"id": plan_id, "name": plan["name"], "description": plan["description"], "noise": plan["noise"]}
             for plan_id, plan in PROMPT_PLANS.items()
@@ -177,7 +177,7 @@ async def create_generation(request: Request) -> JSONResponse:
         "noise": StableAudioClient().config.init_noise_level,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     asyncio.create_task(_run_generation(job_id, source_path, job_dir))
-    _backend_log("job queued; returning 202 for all five vertical plans", job_id=job_id)
+    _backend_log("job queued; returning 202 for Funk and Lo-fi plans", job_id=job_id)
     return JSONResponse({"id": job_id, "status": "queued"}, status_code=202)
 
 
@@ -227,7 +227,7 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
     provider = _make_provider()
     job["provider"] = provider.status()
     _backend_log(
-        f"worker started provider={provider.status()} vertical_plans={len(PROMPT_PLANS)}",
+        f"worker started provider={provider.status()} plans={len(PROMPT_PLANS)}",
         job_id=job_id,
     )
     try:

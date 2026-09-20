@@ -75,11 +75,11 @@
     <main>
       <div class="eyebrow">Hum to Music</div>
       <h1>哼出灵感，<br>听见新曲。</h1>
-      <p class="intro">录下一段熟悉的旋律，我们会一次生成五种不同强度的基础重制方案。</p>
+      <p class="intro">录下一段熟悉的旋律，我们会一次生成 Funk 和 Lo-fi 两种风格版本。</p>
       <section class="preset-panel" aria-labelledby="preset-title">
-        <h2 id="preset-title">五种纵向重制方案</h2>
-        <p>从 1 到 5 逐步增加改编幅度和重绘强度。中文只供我们参考，模型实际使用英文 prompt。</p>
-        <div id="prompt-presets" aria-live="polite"><p>正在读取 5 个方案…</p></div>
+        <h2 id="preset-title">Funk / Lo-fi 风格方案</h2>
+        <p>两种版本都保留原始旋律与节奏，中文只供参考，模型实际使用英文 prompt。</p>
+        <div id="prompt-presets" aria-live="polite"><p>正在读取两个方案…</p></div>
       </section>
       <div class="record-wrap">
         <button id="record" type="button" aria-label="按住录音"><span class="mic">🎙️</span><span id="record-label">按住哼唱</span></button>
@@ -293,7 +293,7 @@
       redo.classList.remove('hidden');
       make.classList.remove('hidden');
       results.classList.add('hidden');
-        setStatus('录好了。先听听，再一次生成五种方案。');
+      setStatus('录好了。先听听，再生成 Funk 和 Lo-fi。');
     }
     function useAudioFile(file) {
       if (!file) { log('ERROR no file selected'); setStatus('请先选择一个音频文件。'); return; }
@@ -310,7 +310,7 @@
       redo.classList.remove('hidden');
       make.classList.remove('hidden');
       results.classList.add('hidden');
-      setStatus(`已选择：${file.name}。先试听，再一次生成五种方案。`);
+      setStatus(`已选择：${file.name}。先试听，再生成 Funk 和 Lo-fi。`);
       log('READY', 'audio preview created');
       // Let the user review the complete prompt before explicitly submitting.
     }
@@ -336,7 +336,7 @@
       log('GENERATE_CLICK', `blob=${!!blob}`, blob ? `${blob.size} bytes ${blob.type}` : 'none');
       if (!blob) return;
       make.disabled = true; redo.disabled = true;
-      setStatus('正在上传录音，音乐模型正在生成五种纵向方案…');
+      setStatus('正在上传录音，音乐模型正在生成 Funk 和 Lo-fi…');
       try {
         log('UPLOAD_START', 'sending audio body');
         const ext = blob.type.includes('webm') ? 'webm' : 'm4a';
@@ -369,7 +369,7 @@
       results.insertAdjacentHTML('afterbegin', successful.map(item => `<article class="card"><h2>方案 ${escapeHtml(item.plan_name || item.plan)} · 重绘强度 ${escapeHtml(item.noise)}</h2><p>试听反馈：能否听出原哼唱？改编幅度是否足够？哪个方案最好、哪个最差？</p><audio controls preload="none" src="${apiUrl(item.audio_url)}"></audio><details><summary>查看本次 prompt（中文参考 + 英文原文）</summary><h3>中文参考</h3><p>${escapeHtml(item.prompt_zh || job.prompt_translations?.[item.plan] || '')}</p><h3>模型实际英文 prompt</h3><pre>${escapeHtml(item.prompt || job.prompts?.[item.plan] || '')}</pre></details></article>`).join(''));
       results.classList.remove('hidden');
       stage.classList.add('has-results');
-      setStatus(successful.length === 5 ? '完成：五种纵向方案音频已生成。' : successful.length ? `已生成 ${successful.length} 个方案。` : '音乐模型方案生成失败。');
+      setStatus(successful.length === 2 ? '完成：Funk 和 Lo-fi 音频已生成。' : successful.length ? `已生成 ${successful.length} 个方案。` : '音乐模型方案生成失败。');
     }
   </script>
 </body>
