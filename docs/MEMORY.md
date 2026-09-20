@@ -8,6 +8,8 @@
 - 该配置没有比之前 CPU offload 的约 197 秒实测明显变快。PyTorch 记录峰值 allocated 26.975GB、reserved 27.031GB，而显卡物理显存约 15.90GB，说明当前运行仍在承受显存超额/动态换入压力，不能视为完整驻留显存的安全模式；暂不尝试 `none`，避免无意义的 OOM。
 - 下一轮性能实验优先保持 `dit_cuda`，降低 steps 或做 CFG 4 与 CFG 1 的 A/B；当前每一步约 10 秒，固定模板与设备准备约占一半以上总耗时。
 - 同时修正 Worker 响应头 `X-DiffSynth-Conditioning-Seconds`：此前误填了整个请求耗时，现在只记录 `CONDITIONING_READY` 阶段，避免后端诊断误导。
+- 修正后的响应头已在 Worker 构建 `4448455` 生效。相同输入改用 steps 5 的任务 `a0ba21ab94` 成功完成：Worker 141.699 秒、开发机请求 141.984 秒，conditioning 2.191 秒，模型推理 139.360 秒，输出仍为 10.96 秒。
+- steps 5 的 5 个 denoise step 分别约 9.325、8.836、9.060、8.843、9.096 秒；相对 steps 10 的约 196.97 秒节省约 55 秒（约 28%），但模板正/负分支仍约 53 秒，固定开销明显。峰值 allocated/reserved 仍约 26.98/27.03GB，显存压力没有因 steps 降低而消失。
 
 ## 2026-09-20：DiffSynth Worker 细粒度性能埋点
 
