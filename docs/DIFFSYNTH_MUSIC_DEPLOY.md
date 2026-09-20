@@ -37,5 +37,6 @@ DIFFSYNTH_REMOTE_TOKEN=与服务端相同的token
 ## 当前实现边界
 
 - 服务只开放官方示例中的 Prosody Control，便于先验证“保留哼唱节奏/旋律意图、重新生成编曲”的端到端效果。
+- worker 只加载 `template_prosody`，不加载 `template_control` 和 `template_reference`；Prosody 模板常驻显存，主模型使用官方 low-VRAM 磁盘 offload 配置，以适配 16GB 显存的 RTX 5060 Ti。
 - 五个前端方案会依次调用同一个远端 worker，因此首次实验会消耗较长时间；可通过 `DIFFSYNTH_STEPS` 和 `DIFFSYNTH_CFG_SCALE` 调整质量/速度。
 - 5060Ti 16G 是否能在目标时长和步数下稳定运行，需要在目标机实测；服务启动时会检查 CUDA，显存峰值会打印到 worker 日志。

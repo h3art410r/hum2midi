@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import tempfile
 import time
+import traceback
 from pathlib import Path
 
 import torch
@@ -37,12 +38,46 @@ TEMPLATE = None
 
 
 def _configs():
+    vram_config = {
+        "offload_dtype": "disk",
+        "offload_device": "disk",
+        "onload_dtype": "disk",
+        "onload_device": "disk",
+        "preparing_dtype": torch.bfloat16,
+        "preparing_device": "cuda",
+        "computation_dtype": torch.bfloat16,
+        "computation_device": "cuda",
+    }
+    vram_config_cpu = {
+        "offload_dtype": torch.bfloat16,
+        "offload_device": "cpu",
+        "onload_dtype": torch.bfloat16,
+        "onload_device": "cpu",
+        "preparing_dtype": torch.bfloat16,
+        "preparing_device": "cuda",
+        "computation_dtype": torch.bfloat16,
+        "computation_device": "cuda",
+    }
+    vram_config_fp32 = {
+        "offload_dtype": torch.float32,
+        "offload_device": "cpu",
+        "onload_dtype": torch.float32,
+        "onload_device": "cpu",
+        "preparing_dtype": torch.float32,
+        "preparing_device": "cuda",
+        "computation_dtype": torch.float32,
+        "computation_device": "cuda",
+    }
     return [
-        ModelConfig(model_id=MODEL_ID, origin_file_pattern="transformer/model.safetensors"),
-        ModelConfig(model_id=MODEL_ID, origin_file_pattern="conditioner/model.safetensors"),
-        ModelConfig(model_id=MODEL_ID, origin_file_pattern="text_encoder/model.safetensors"),
-        ModelConfig(model_id=MODEL_ID, origin_file_pattern="vae/model.safetensors"),
-        ModelConfig(model_id=MODEL_ID, origin_file_pattern="track_separator/model.safetensors", computation_dtype=torch.float32),
+        # Disk offload keeps VRAM low, but DiffSynth's Windows execution path
+        # deep-copies disk-backed modules during inference. The safetensors
+        # handles are not deepcopy/pickle-safe, so use CPU offload for these
+        # three modules on Windows and keep only the active layer on CUDA.
+        ModelConfig(model_id=MODEL_ID, origin_file_pattern="transformer/model.safetensors", **vram_config_cpu),
+        ModelConfig(model_id=MODEL_ID, origin_file_pattern="conditioner/model.safetensors", **vram_config_cpu),
+        ModelConfig(model_id=MODEL_ID, origin_file_pattern="text_encoder/model.safetensors", **vram_config_cpu),
+        ModelConfig(model_id=MODEL_ID, origin_file_pattern="vae/model.safetensors", **vram_config_cpu),
+        ModelConfig(model_id=MODEL_ID, origin_file_pattern="track_separator/model.safetensors", **vram_config_fp32),
     ]
 
 
@@ -54,13 +89,12 @@ def load_models() -> None:
     PIPE = DiffSynthMusicPipeline.from_pretrained(
         torch_dtype=dtype, device="cuda", model_configs=_configs(),
         tokenizer_config=ModelConfig(model_id=MODEL_ID, origin_file_pattern="text_encoder/"),
+        vram_limit=torch.cuda.mem_get_info("cuda")[1] / (1024 ** 3) - 0.5,
     )
     TEMPLATE = TemplatePipeline.from_pretrained(
         torch_dtype=dtype, device="cuda",
         model_configs=[
-            ModelConfig(model_id=MODEL_ID, origin_file_pattern="template_control/"),
             ModelConfig(model_id=MODEL_ID, origin_file_pattern="template_prosody/"),
-            ModelConfig(model_id=MODEL_ID, origin_file_pattern="template_reference/"),
         ],
     )
 
@@ -116,19 +150,9 @@ async def generate(
         if sample_rate != 48000:
             waveform = torchaudio.functional.resample(waveform, sample_rate, 48000)
         waveform = waveform.mean(dim=0, keepdim=True)
-        # The paper's recommended composition is complementary: Control
-        # (model_id=0) preserves vocal onsets/rhythm while Prosody (model_id=1)
-        # preserves pitch and timing without copying vocal timbre.
         prosody = extract_prosody(waveform)
         seconds = float(duration) if duration.strip() else prosody.shape[1] / 48000
         started = time.perf_counter()
-        template_inputs = []
-        negative_template_inputs = []
-        if control_profile != "prosody":
-            template_inputs.append({"model_id": 0, "audio": waveform})
-            negative_template_inputs.append({"model_id": 0, "audio": waveform})
-        template_inputs.append({"model_id": 1, "audio": prosody})
-        negative_template_inputs.append({"model_id": 1, "audio": prosody})
         denoise = float(denoising_strength) if denoising_strength.strip() else None
         result = TEMPLATE(
             PIPE,
@@ -140,16 +164,18 @@ async def generate(
             tiled=True,
             cfg_scale=float(cfg_scale) if cfg_scale.strip() else float(os.getenv("DIFFSYNTH_CFG_SCALE", "4")),
             num_inference_steps=int(steps) if steps.strip() else int(os.getenv("DIFFSYNTH_STEPS", "50")),
-            template_inputs=template_inputs,
-            negative_template_inputs=negative_template_inputs,
+            # Only template_prosody is resident on this 16GB GPU.
+            template_inputs=[{"model_id": 0, "audio": prosody}],
+            negative_template_inputs=[{"model_id": 0, "audio": prosody}],
             input_audio=waveform if denoise is not None else None,
-            denoising_strength=denoise,
+            denoising_strength=denoise if denoise is not None else 1.0,
         )
         # Avoid torchaudio.save -> TorchCodec on newer torchaudio builds.
         sf.write(str(output_path), result.detach().float().cpu().numpy().T, 48000, subtype="PCM_16")
         print(f"generated seconds={seconds:.2f} elapsed={time.perf_counter() - started:.1f}s vram={torch.cuda.max_memory_allocated()/1024**3:.2f}GB", flush=True)
         return FileResponse(output_path, media_type="audio/wav", filename="diffsynth-output.wav")
     except Exception as exc:
+        traceback.print_exc()
         raise HTTPException(500, f"DiffSynth generation failed: {type(exc).__name__}: {exc}") from exc
     finally:
         # FileResponse reads lazily; cleanup is intentionally deferred by the
