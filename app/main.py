@@ -354,7 +354,11 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
             diagnostics.setdefault("requested_cfg_scale", float(job.get("cfg_scale", "4")))
             diagnostics.setdefault("requested_steps", int(job.get("steps", "10")))
             diagnostics.setdefault("requested_seed", int(job.get("seed", "101")))
-            diagnostics.setdefault("requested_denoising_strength", float(job.get("denoising_strength", "0.65")))
+            requested_denoise = job.get("denoising_strength")
+            diagnostics.setdefault(
+                "requested_denoising_strength",
+                float(requested_denoise) if requested_denoise else None,
+            )
             job["variants"][variant_id] = {
                 "plan": plan_id,
                 "plan_name": plan["name"],
