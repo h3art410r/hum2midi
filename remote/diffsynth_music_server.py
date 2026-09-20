@@ -40,6 +40,14 @@ WORKER_BUILD = os.getenv("H2M_WORKER_BUILD", "unknown")
 TEMPLATE_LAZY_LOADING = os.getenv("DIFFSYNTH_TEMPLATE_LAZY_LOADING", "1").strip().lower() not in {
     "0", "false", "no", "off"
 }
+# The worker normally uses the same audio conditioning for positive and
+# negative CFG branches.  Template outputs are independent of the text
+# prompt, so keeping one KV cache and passing it to both branches is both
+# semantically equivalent and materially safer on a 16 GB card.  Set this to
+# false only when a future caller supplies distinct negative template inputs.
+REUSE_IDENTICAL_TEMPLATE_CACHE = os.getenv(
+    "DIFFSYNTH_REUSE_TEMPLATE_CACHE", "1"
+).strip().lower() not in {"0", "false", "no", "off"}
 
 app = FastAPI(title="DiffSynth-Music Prosody Worker")
 PIPE = None
@@ -143,6 +151,17 @@ def _render_with_timings(
         negative_template_cache = {}
         timings["template_negative_seconds"] = 0.0
         _worker_log("TEMPLATE_NEGATIVE_SKIPPED", request_id, reason="cfg_scale=1")
+    elif REUSE_IDENTICAL_TEMPLATE_CACHE:
+        # The positive and negative branches receive the exact same control
+        # and prosody tensors. Template models do not see the text prompt, so
+        # their KV cache is identical; alias it instead of allocating a second
+        # cache (which is enough to OOM a 16 GB card).
+        negative_template_cache = template_cache
+        timings["template_negative_seconds"] = 0.0
+        _worker_log(
+            "TEMPLATE_NEGATIVE_REUSED", request_id,
+            reason="identical_control_and_prosody_inputs",
+        )
     else:
         started = time.perf_counter()
         negative_template_cache = TEMPLATE.call_single_side(pipe=PIPE, inputs=negative_template_inputs)
@@ -374,6 +393,7 @@ def load_models() -> None:
         vram_limit_gb=_vram_limit_gb() if _vram_limit_gb() is not None else "none",
         templates="control,prosody",
         template_lazy_loading=TEMPLATE_LAZY_LOADING,
+        reuse_template_cache=REUSE_IDENTICAL_TEMPLATE_CACHE,
         offload_mode=OFFLOAD_MODE,
     )
 
