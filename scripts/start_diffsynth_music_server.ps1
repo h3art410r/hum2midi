@@ -34,8 +34,8 @@ $env:DIFFSYNTH_SERVER_PORT = $Port
 $env:H2M_WORKER_BUILD = (& git -C $RepoRoot rev-parse --short HEAD 2>$null).Trim()
 if (-not $env:H2M_WORKER_BUILD) { $env:H2M_WORKER_BUILD = "unknown" }
 $env:DIFFSYNTH_SERVER_HOST = if ($env:DIFFSYNTH_SERVER_HOST) { $env:DIFFSYNTH_SERVER_HOST } else { "0.0.0.0" }
-Write-Host "Starting DiffSynth-Music Prosody worker on $($env:DIFFSYNTH_SERVER_HOST):$Port"
-Write-Host "Build: $($env:H2M_WORKER_BUILD); execution: official DiffSynth model-card path"
+Write-Host "Starting native DiffSynth-Music Prosody worker on $($env:DIFFSYNTH_SERVER_HOST):$Port"
+Write-Host "Build: $($env:H2M_WORKER_BUILD); execution: official Prosody Quick Start"
 $ModelId = if ($env:DIFFSYNTH_MODEL_ID) { $env:DIFFSYNTH_MODEL_ID } else { "DiffSynth-Studio/DiffSynth-Music" }
 Write-Host "First launch downloads model $ModelId. Keep this window open."
-& $Vpy -m uvicorn remote.diffsynth_music_server:app --host $env:DIFFSYNTH_SERVER_HOST --port $Port
+& $Vpy -m uvicorn native.worker_server:app --host $env:DIFFSYNTH_SERVER_HOST --port $Port
