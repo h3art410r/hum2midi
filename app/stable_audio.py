@@ -26,8 +26,8 @@ PROMPT_PLANS = {
         # Kept for the optional Stable Audio compatibility path. The active
         # DiffSynth worker uses the official TemplatePipeline path instead.
         "noise": 0.65,
-        "prompt": "Create a polished instrumental funk track from the input humming. Keep the original melody, phrasing, and rhythmic identity clearly recognizable. Replace the raw humming with a strong bass groove, syncopated drums, rhythmic guitar, tight keyboard accents, and a catchy musical arrangement. Make it energetic, stylish, and memorable. Do not keep the original vocal recording or its background noise.",
-        "translation": "根据输入哼唱创作一首完整的器乐 Funk 音乐。清楚保留原始旋律、乐句和节奏身份，用有力度的贝斯律动、切分鼓点、节奏吉他、键盘点缀和抓耳编曲替换原始哼唱。整体要有能量、有风格、有记忆点，不保留原始人声或底噪。",
+        "prompt": "An energetic instrumental funk track with a strong bass groove, syncopated drums, rhythmic guitar, tight keyboard accents, and a memorable arrangement.",
+        "translation": "一首充满能量的器乐 Funk：强劲贝斯律动、切分鼓点、节奏吉他、紧凑的键盘点缀，以及有记忆点的编曲。",
     },
 }
 
@@ -51,7 +51,7 @@ class StableAudioConfig:
     steps: int = 8
     threads: int = 8
     init_noise_level: float = 0.70
-    seed: int | None = 101
+    seed: int | None = 42
     output_seconds: float = 20.0
     timeout_seconds: int = 600
 
@@ -66,7 +66,7 @@ class StableAudioConfig:
             steps=max(1, int(os.getenv("STABLE_AUDIO_STEPS", "8"))),
             threads=max(1, int(os.getenv("STABLE_AUDIO_THREADS", str(min(os.cpu_count() or 8, 8))))),
             init_noise_level=min(1.0, max(0.0, float(os.getenv("STABLE_AUDIO_INIT_NOISE_LEVEL", "0.70")))),
-            seed=(int(os.getenv("STABLE_AUDIO_SEED", "101")) if os.getenv("STABLE_AUDIO_SEED", "101").strip() else None),
+            seed=(int(os.getenv("STABLE_AUDIO_SEED", "42")) if os.getenv("STABLE_AUDIO_SEED", "42").strip() else None),
             output_seconds=float(os.getenv("STABLE_AUDIO_OUTPUT_SECONDS", "20")),
             timeout_seconds=max(30, int(os.getenv("STABLE_AUDIO_TIMEOUT_SECONDS", "600"))),
         )

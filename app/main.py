@@ -128,7 +128,7 @@ async def create_generation(request: Request) -> JSONResponse:
     control_profile = request.headers.get("x-diffsynth-control-profile", "prosody").strip()
     cfg_scale = request.headers.get("x-diffsynth-cfg-scale", "4").strip()
     steps = request.headers.get("x-diffsynth-steps", "50").strip()
-    seed = request.headers.get("x-diffsynth-seed", "101").strip()
+    seed = request.headers.get("x-diffsynth-seed", "42").strip()
     if requested_preset:
         _backend_log(
             f"legacy preset header ignored; generating the Funk plan requested={requested_preset}",
@@ -323,7 +323,7 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
                         "control_profile": profile,
                         "cfg_scale": float(job.get("cfg_scale", "4")),
                         "steps": int(job.get("steps", "50")),
-                        "seed": int(job.get("seed", "101")),
+                        "seed": int(job.get("seed", "42")),
                     })
                 diagnostics = await asyncio.to_thread(provider.render, audio_path, "transform", output_path, **render_kwargs)
             except Exception as exc:
@@ -347,7 +347,7 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
             diagnostics.setdefault("requested_profile", job.get("control_profile"))
             diagnostics.setdefault("requested_cfg_scale", float(job.get("cfg_scale", "4")))
             diagnostics.setdefault("requested_steps", int(job.get("steps", "50")))
-            diagnostics.setdefault("requested_seed", int(job.get("seed", "101")))
+            diagnostics.setdefault("requested_seed", int(job.get("seed", "42")))
             job["variants"][variant_id] = {
                 "plan": plan_id,
                 "plan_name": plan["name"],
@@ -413,7 +413,11 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
 
 
 def _to_wav(source: Path, *, job_id: str | None = None) -> Path:
-    target = source.parent / "audio_44k_stereo.wav"
+    # DiffSynth-Music's official LoadMultiTrackAudio path works at 48 kHz.
+    # Keep two decoded channels here for compatibility with the browser and
+    # let the CUDA worker choose the active channel and mirror it into two
+    # identical channels before extracting prosody.
+    target = source.parent / "audio_48k_stereo.wav"
     started = time.perf_counter()
     try:
         ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
@@ -421,7 +425,7 @@ def _to_wav(source: Path, *, job_id: str | None = None) -> Path:
             [
                 ffmpeg, "-y", "-i", str(source), "-vn",
                 "-af", "loudnorm=I=-14:TP=-1.0:LRA=7",
-                "-ac", "2", "-ar", "44100", "-c:a", "pcm_s16le", str(target),
+                "-ac", "2", "-ar", "48000", "-c:a", "pcm_s16le", str(target),
             ],
             check=True,
             stdout=subprocess.DEVNULL,

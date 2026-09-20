@@ -343,7 +343,7 @@
       try {
         log('UPLOAD_START', 'sending audio body');
         const ext = blob.type.includes('webm') ? 'webm' : 'm4a';
-        const response = await debugFetch('/api/generations',{method:'POST',headers:{'Content-Type':blob.type,'X-Audio-Filename':`hum.${ext}`,'X-DiffSynth-Control-Profile':'prosody','X-DiffSynth-Cfg-Scale':'4','X-DiffSynth-Steps':'50','X-DiffSynth-Seed':'101'},body:blob});
+        const response = await debugFetch('/api/generations',{method:'POST',headers:{'Content-Type':blob.type,'X-Audio-Filename':`hum.${ext}`,'X-DiffSynth-Control-Profile':'prosody','X-DiffSynth-Cfg-Scale':'4','X-DiffSynth-Steps':'50','X-DiffSynth-Seed':'42'},body:blob});
         const created = await response.json();
         if (!response.ok) throw new Error(created.detail || '请求失败');
         await poll(created.id);

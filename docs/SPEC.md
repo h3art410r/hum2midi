@@ -7,7 +7,7 @@
 ## 产品流程
 
 1. 手机浏览器按住按钮录制 5–15 秒真实哼唱；桌面浏览器提供 16:9 调试视图。
-2. 用户提交录音，后端把输入统一成 44.1kHz、双声道 WAV，并保留这份归一化输入供试听。
+2. 用户提交录音，后端把输入统一成 48kHz、双声道 WAV，并保留这份归一化输入供试听；Worker 会选择有效声道、复制成两个相同声道，并按官方 3840 样本块对齐。
 3. 音频 provider 由 `H2M_AUDIO_PROVIDER` 显式选择。当前验收使用 `diffsynth_remote`，由 5060Ti Windows CUDA worker 按 DiffSynth-Music 官方模型卡的 `TemplatePipeline`，直接使用 Prosody 条件生成完整音乐。两者都不叠加原始人声轨或额外伴奏轨。
 4. 页面轮询任务状态，展示一个生成的 Funk WAV；失败时显示具体错误。
 
@@ -17,8 +17,8 @@
 - 远端模型：`DiffSynth-Studio/DiffSynth-Music` 官方 Prosody；服务代码在 `remote/diffsynth_music_server.py`，Windows 启动脚本在 `scripts/start_diffsynth_music_server.ps1`。远端不可用时明确失败，绝不静默回退。
 - Worker 采用官方文档的 BF16、低显存 `ModelConfig`、`vram_limit` 和 `TemplatePipeline` 懒加载；只传入官方 Prosody `model_id=1`，不使用自定义 cache 合并、层分页、重绘锚定或 forward 包装。
 - 输入格式：M4A/MP4、WebM、WAV、MP3；服务端统一转 WAV 并做响度归一化。
-- 输出：每个任务生成与规范化输入同长的 `1.wav`，保持 44.1kHz 双声道；只有输入时长不可读时才使用 10 秒兜底。
-- 前端展示 Funk 的英文原文和中文参考；当前参数固定为官方 Prosody、CFG 4、官方默认步数 50、seed 101。用户通过试听结果和后端日志共同评估，不再显示重绘参数面板。中文只供人阅读，模型始终接收英文 prompt。
+- 输出：每个任务生成与官方 Prosody 条件同长的 `1.wav`，保持 48kHz 双声道；时长从对齐后的 prosody 张量推导，不接受浏览器时长字段去拉伸或裁剪。
+- 前端展示 Funk 的英文原文和中文参考；当前参数固定为官方 Prosody、CFG 4、官方默认步数 50、seed 42。用户通过试听结果和后端日志共同评估，不再显示重绘参数面板。中文只供人阅读，模型始终接收英文 prompt。
 
 ## API
 

@@ -190,7 +190,7 @@ def generate(
     audio: UploadFile = File(...),
     prompt: str = Form(...),
     duration: str = Form(""),
-    seed: int = Form(101),
+    seed: int = Form(42),
     control: str = Form("prosody"),
     control_profile: str = Form("prosody"),
     cfg_scale: str = Form(""),
@@ -253,10 +253,44 @@ def generate(
                 elapsed=f"{time.perf_counter() - resample_started:.3f}s",
             )
 
-        # The official Prosody example extracts a mono prosody condition and
-        # passes only template model 1 to TemplatePipeline.
-        prosody = extract_prosody(waveform.mean(dim=0, keepdim=True))
-        seconds = float(duration) if duration.strip() else prosody.shape[1] / 48000
+        # LoadMultiTrackAudio(division_factor=3840) in the official example
+        # repeats a mono source into two channels and truncates the sample
+        # count to a multiple of 3840.  Phone recordings are sometimes
+        # technically stereo while only one channel contains the hum.  An
+        # ordinary channel mean would halve that signal (and may mix it with
+        # a silent channel), so choose the loudest channel and explicitly
+        # mirror it into two identical channels before extracting prosody.
+        channel_rms = waveform.pow(2).mean(dim=1).sqrt()
+        selected_channel = int(torch.argmax(channel_rms).item())
+        mono = waveform[selected_channel:selected_channel + 1]
+        waveform = mono.repeat(2, 1)
+        raw_samples = int(waveform.shape[1])
+        aligned_samples = raw_samples // 3840 * 3840
+        if aligned_samples < 3840:
+            raise HTTPException(400, "Input audio is shorter than one official prosody block")
+        waveform = waveform[:, :aligned_samples]
+        _worker_log(
+            "INPUT_CHANNELS_NORMALIZED",
+            request_id,
+            selected_channel=selected_channel,
+            source_channels=int(samples.shape[1]),
+            channel_rms_db=",".join(
+                f"{20 * torch.log10(value.clamp_min(1e-8)).item():.1f}"
+                for value in channel_rms
+            ),
+            duplicated_channels=int(waveform.shape[0]),
+            raw_samples=raw_samples,
+            aligned_samples=aligned_samples,
+            division_factor=3840,
+        )
+
+        # The official Prosody example derives duration from the actual
+        # prosody tensor.  Ignore the browser's advisory duration field so
+        # generation cannot stretch or crop the user's phrase.
+        conditioning_started = time.perf_counter()
+        prosody = extract_prosody(waveform)
+        conditioning_elapsed = time.perf_counter() - conditioning_started
+        seconds = prosody.shape[1] / 48000
         cfg = float(cfg_scale) if cfg_scale.strip() else float(os.getenv("DIFFSYNTH_CFG_SCALE", "4"))
         inference_steps = int(steps) if steps.strip() else int(os.getenv("DIFFSYNTH_STEPS", "50"))
         template_inputs = [{"model_id": 1, "audio": prosody}]
@@ -265,7 +299,9 @@ def generate(
             "CONDITIONING_READY",
             request_id,
             duration=f"{seconds:.3f}s",
+            requested_duration=duration or "auto",
             prosody_shape=tuple(prosody.shape),
+            elapsed=f"{conditioning_elapsed:.3f}s",
             templates=",".join(str(item["model_id"]) for item in template_inputs),
         )
 
@@ -324,7 +360,7 @@ def generate(
             filename="diffsynth-output.wav",
             headers={
                 "X-DiffSynth-Request-Id": request_id,
-                "X-DiffSynth-Conditioning-Seconds": "0",
+                "X-DiffSynth-Conditioning-Seconds": f"{conditioning_elapsed:.3f}",
                 "X-DiffSynth-Inference-Seconds": f"{infer_elapsed:.3f}",
                 "X-DiffSynth-Save-Seconds": f"{save_elapsed:.3f}",
                 "X-DiffSynth-Total-Seconds": f"{total_elapsed:.3f}",

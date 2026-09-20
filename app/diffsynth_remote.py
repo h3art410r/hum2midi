@@ -83,7 +83,7 @@ class DiffSynthRemoteClient:
         fields = {
             "prompt": prompt or "Create a compelling instrumental transformation of the input vocal prosody.",
             "duration": str(output_seconds or ""),
-            "seed": str(seed if seed is not None else 101),
+            "seed": str(seed if seed is not None else 42),
             "control": "prosody",
             "control_profile": control_profile,
             "cfg_scale": "" if cfg_scale is None else str(cfg_scale),

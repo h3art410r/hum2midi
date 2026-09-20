@@ -1,5 +1,13 @@
 # 当前决策（2026-09-18）
 
+## 2026-09-21：按官方 Prosody 示例统一输入与参数
+
+- 用户要求按官方 DiffSynth-Music Prosody 示例重新跑一版，不再让浏览器 advisory duration 拉伸或裁剪模型输入。
+- Worker 保持官方 `TemplatePipeline` 调用：Prosody `model_id=1`、`tiled=True`、CFG 4、steps 50、seed 42、时长取 prosody 张量长度。
+- 开发机归一化输入改为 48kHz；Worker 在解码后按每个声道 RMS 选择有效哼唱声道，复制为两个完全相同的声道，再按官方 `division_factor=3840` 截断对齐。这样不会把一条有效声道和一条静音声道平均，避免输入能量被削弱。
+- Worker 日志新增声道 RMS、选择结果、复制声道数、3840 对齐样本数和 prosody 条件耗时；响应头的 conditioning 时间改为真实条件提取耗时。
+- Funk prompt 收敛为简短的官方风格描述，旋律/节奏保持主要交给 Prosody 条件，不再用长串文字约束模型发挥。
+
 ## 2026-09-21：恢复官方 DiffSynth-Music 推理路径
 
 - 用户反馈自定义显存、缓存和重绘逻辑同时影响听感与性能，决定整体回退，不再继续局部打补丁。

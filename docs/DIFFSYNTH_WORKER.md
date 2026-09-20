@@ -37,7 +37,7 @@ Invoke-RestMethod http://127.0.0.1:8765/health | ConvertTo-Json
 
 ## 生成和日志
 
-`POST /v1/generate` 接受音频、英文 prompt、输入时长、seed、CFG、步数和 `control_profile=prosody`。Worker 只传入官方 Prosody template（`model_id=1`），不传入原始音频重绘参数。
+`POST /v1/generate` 接受音频、英文 prompt、输入时长、seed、CFG、步数和 `control_profile=prosody`。Worker 只传入官方 Prosody template（`model_id=1`），不传入原始音频重绘参数。输入在 48kHz 下选择 RMS 最大的有效声道并复制为两个相同声道，再截断到 3840 样本的整数倍；生成时长严格取 prosody 张量长度，忽略浏览器的 advisory duration。默认参数为官方示例的 seed=42、CFG=4、steps=50。
 
 生成后可读取：
 
