@@ -1,5 +1,11 @@
 # 当前决策（2026-09-18）
 
+## 2026-09-21：0.65 听感过保守，默认改为 0.85
+
+- 用户试听反馈当前默认结果与原始哼唱听感过于接近；后端日志确认不是前端拿错音频，任务 `f480ecbc357c48829b0431e156616f79` 实际使用 `Control + Prosody`、CFG4、steps10、seed101、denoising strength 0.65，并成功生成 9.2 秒输出。
+- 在同一录音、同一 prompt、同一 seed 下直接做了两个 Worker A/B：denoise 0.85 的任务 `a75bd72f67` 用时 34.9 秒、峰值 8.78GiB；关闭 `input_audio` 锚定的任务 `261dcb408a` 用时 33.8 秒、峰值 8.78GiB。两者都没有显存超额。
+- 先只改变一个变量，将前端和后端默认 denoising strength 从 0.65 调到 0.85，提交 `bddae21` 已部署到公网；Control+Prosody、steps10、CFG4、seed101 保持不变，便于下一轮听感归因。
+
 ## 2026-09-21：16GB 纯显卡/常驻 DiT A/B（修复后）
 
 - 目标配置保持不变：同一段 10.943 秒真实录音、Control + Prosody、CFG4、steps10、seed101、denoising 0.65。实验提交依次为 `881da7a`（`dit_cuda`）、`5c73c07`（`none`）和 `c8487d3`（恢复 `cpu` 默认）。
