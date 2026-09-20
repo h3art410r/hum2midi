@@ -24,6 +24,7 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from diffsynth.core.data.operators import LoadMultiTrackAudio
+from diffsynth.core.vram.layers import AutoWrappedNonRecurseModule
 from diffsynth.diffusion.template import TemplatePipeline
 from diffsynth.pipelines.diffsynth_music import DiffSynthMusicPipeline, ModelConfig
 from diffsynth.utils.music_tools import extract_prosody
@@ -47,6 +48,16 @@ TEMPLATE_LAZY_LOADING = os.getenv("DIFFSYNTH_TEMPLATE_LAZY_LOADING", "1").strip(
 # false only when a future caller supplies distinct negative template inputs.
 REUSE_IDENTICAL_TEMPLATE_CACHE = os.getenv(
     "DIFFSYNTH_REUSE_TEMPLATE_CACHE", "1"
+).strip().lower() not in {"0", "false", "no", "off"}
+# Each DiffSynth-Music template is a full ~8 GB DiT.  TemplatePipeline does
+# not use the base pipeline's VRAM manager, so on a 16 GB card the template
+# weights and their KV cache can briefly exceed physical VRAM.  In CPU mode,
+# keep the template's transformer blocks on RAM and materialize one block at a
+# time for its forward pass.  This is slower, but it prevents WDDM
+# oversubscription while preserving the Control+Prosody path.
+TEMPLATE_LAYER_CPU_OFFLOAD = os.getenv(
+    "DIFFSYNTH_TEMPLATE_LAYER_CPU_OFFLOAD",
+    "1" if OFFLOAD_MODE == "cpu" else "0",
 ).strip().lower() not in {"0", "false", "no", "off"}
 
 app = FastAPI(title="DiffSynth-Music Prosody Worker")
@@ -100,6 +111,41 @@ def _release_temporary_cuda_memory() -> None:
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+
+def _prepare_template_model(model: torch.nn.Module) -> torch.nn.Module:
+    """Move template DiT blocks to CPU and page one block to CUDA per call.
+
+    TemplatePipeline intentionally ignores ModelConfig VRAM settings.  The
+    template models are full DiffSynthMusicDiTModel instances, so wrapping
+    their repeated blocks is the smallest safe way to keep Control+Prosody
+    under a 16 GB card without dropping a conditioning branch.
+    """
+    if not TEMPLATE_LAYER_CPU_OFFLOAD or getattr(model, "_h2m_template_cpu", False):
+        return model
+    layers = getattr(model, "layers", None)
+    if not isinstance(layers, torch.nn.ModuleList):
+        return model
+    for index, layer in enumerate(list(layers)):
+        wrapped = AutoWrappedNonRecurseModule(
+            layer,
+            offload_dtype=torch.bfloat16,
+            offload_device="cpu",
+            onload_dtype=torch.bfloat16,
+            onload_device="cpu",
+            preparing_dtype=torch.bfloat16,
+            preparing_device="cuda",
+            computation_dtype=torch.bfloat16,
+            computation_device="cuda",
+        )
+        # load_template_model creates the template on CUDA.  Keep the small
+        # root modules there, but put the repeated transformer blocks in RAM;
+        # AutoWrappedNonRecurseModule will make a temporary CUDA copy per
+        # forward and release it when the call returns.
+        wrapped.module.to(dtype=torch.bfloat16, device="cpu")
+        layers[index] = wrapped
+    model._h2m_template_cpu = True
+    return model
 
 
 def _render_with_timings(
@@ -385,6 +431,17 @@ def load_models() -> None:
         ],
         lazy_loading=TEMPLATE_LAZY_LOADING,
     )
+    if TEMPLATE_LAZY_LOADING:
+        original_fetch_template_model = TEMPLATE.fetch_model
+
+        def fetch_template_model(model_id):
+            return _prepare_template_model(original_fetch_template_model(model_id))
+
+        TEMPLATE.fetch_model = fetch_template_model
+    elif TEMPLATE.models is not None:
+        TEMPLATE.models = torch.nn.ModuleList(
+            [_prepare_template_model(model) for model in TEMPLATE.models]
+        )
     _worker_log(
         "MODEL_LOAD_DONE",
         elapsed=f"{time.perf_counter() - started:.3f}s",
@@ -394,6 +451,7 @@ def load_models() -> None:
         templates="control,prosody",
         template_lazy_loading=TEMPLATE_LAZY_LOADING,
         reuse_template_cache=REUSE_IDENTICAL_TEMPLATE_CACHE,
+        template_layer_cpu_offload=TEMPLATE_LAYER_CPU_OFFLOAD,
         offload_mode=OFFLOAD_MODE,
     )
 
