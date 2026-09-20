@@ -144,3 +144,4 @@
 - 本地编译、FastAPI 路由、PowerShell 解析检查均通过。用真实 `1-哼唱.m4a`（10.516 秒）对当前远端 Worker 做协议冒烟测试：输入对齐到 10.480 秒，steps=1 时 Funk 39.137 秒、Lo-fi 29.265 秒，输出均为 48kHz 双声道 10.480 秒 WAV，Worker 峰值 reserved 约 8.97 GiB。该结果验证了新后端协议和先出先展示逻辑，不代表官方 50 steps 的最终听感基线。
 - 当前主分支提交 `d5a7fe2` 已推送到远端仓库；GPU 机器健康接口仍显示旧构建，需重启其 daemon 后才会切换到新 Worker 入口。
 - 开发机已启动 `native.api` 监听 8000，并恢复 `scripts/start_hum2midi_tunnel.ps1` 的反向隧道；公网 `/hum2midi/` 和 `/api/health` 已返回 200。公网 502 的直接原因是隧道进程未运行，不是前后端路由故障。当前公网健康返回的是已自动拉取最新提交、但仍由旧 daemon 启动的旧 Worker；重启 daemon 后再确认 `execution=official_prosody_quick_start`。
+- 手机上传补充了文件名编码：前端用 `encodeURIComponent` 发送 `X-Audio-Filename`，后端解码后再取扩展名，避免中文文件名让浏览器在发请求前抛出无响应错误。
