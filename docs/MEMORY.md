@@ -134,3 +134,4 @@
 - `negative_template_inputs` 与文本 `negative_prompt` 是两条不同的 CFG 分支。Prosody-only 按官方示例把同一份 Prosody 波形传给正、负模板输入；不能用文本负向词替代，也不能把它解释成降噪。
 - 固定输入、种子、CFG 和步数的首轮 A/B 只改变正向风格 prompt。只有确认可复现的具体伪影后，才允许把很短的实验性负向后缀作为独立变量，不能直接覆盖官方基线。
 - 论文和 pipeline 都支持 KV memory 复用。新后端先做一次官方 `extract_prosody` 和正/负模板 KV cache，再顺序用同一对 cache 生成 Funk、Lo-fi；两种风格共用同一条件，单模型常驻以避免 16GB 显存同时加载两套采样状态。缓存只在单任务生命周期内保留。
+- 已确认下一步的改动边界：只按官方 Quick Start 调整 Worker 的模型调用方式，不改模型权重、DiT 内部 forward 或常驻 daemon。Worker 代码推到 `main` 后由 daemon 自动拉取、重启模型子进程并健康检查；daemon 脚本本身不变。
