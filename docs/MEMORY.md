@@ -6,6 +6,8 @@
 - 真实录音任务 `8608ed2c6a2546d28b012fea99e4808d`（输入 10.943 秒）已完成：上传和 ffmpeg 归一化约 0.55 秒，模型请求耗时 130.15 秒，输出 10.96 秒；性能瓶颈在远端模型请求，不在开发机上传、转码或任务轮询。
 - 第一轮提交因客户端把表单字段 `control` 错写为 `control+prosody` 被旧 Worker 立即 HTTP 400 拒绝，已修复为 `control=prosody` + `control_profile=control_prosody`，修复提交为 `db421dd`。
 - Worker 需要拉取 `db421dd` 并重启，才能看到新增的 `INPUT_DECODED`、`CONDITIONING_READY`、`MODEL_INFER_START/DONE`、显存峰值和 `AUDIO_SAVE_DONE` 分段日志；开发机后端已重启并运行新代码。
+- 速度对照（同一输入、Control + Prosody、CFG 4、seed 101）：steps 10 + denoising 0.65 为 130.15 秒；steps 5 + denoising 0.65 为 87.82 秒；steps 5 且关闭 `input_audio` 重绘锚定为 64.99 秒。由此可见推理有明显固定开销，输入音频 VAE 锚定还会增加约 23 秒；是否关闭锚定要结合听感决定。
+- 显式关闭锚定使用 `X-DiffSynth-Denoising-Strength: off`；后端已修复空值诊断字段误把成功结果报成 `float('')` 失败的问题。
 
 用户否定旧“创意分”，体感惊艳仅 0.1；此前通过声学代理门不能证明创意及格。当前转向提示词工程：每轮五个差异明显的纵向方案，前端展示完整内容，用户比较最好/最差并给听感反馈。遵循只需认得出原哼唱，创意评结构和抓耳程度。未反馈候选均待评。 
 
