@@ -147,3 +147,4 @@
 - 手机上传补充了文件名编码：前端用 `encodeURIComponent` 发送 `X-Audio-Filename`，后端解码后再取扩展名，避免中文文件名让浏览器在发请求前抛出无响应错误。
 - Native 后端规范化现在明确选择双声道中能量更高的一侧，再复制为两个相同声道；不再让 `ffmpeg -ac 2` 把有效哼唱与弱/噪声声道平均，符合官方 Prosody 输入适配和用户要求。
 - 新 Worker 首轮真实冒烟发现当前 DiffSynth 版本的 `LoadMultiTrackAudio` 会通过 `torchaudio` 要求可选 TorchCodec。已加入仅针对该缺失依赖的 soundfile fallback：保持 `[channels, samples]`、48kHz 和 3840 对齐后继续走官方 `extract_prosody` 与 `TemplatePipeline`，不改模型内部。真实输入单步测试成功：Prosody 0.357 秒、推理 33.305 秒、总计 33.674 秒、峰值 reserved 8.969 GiB，输出 10.480 秒 WAV。
+- 新 Worker 默认 50 steps 的正式双风格基线任务 `f6d12de8f1d542b29ea0ec64dfb50899` 已完成：真实输入 10.516 秒、Prosody 对齐 10.480 秒；Funk Worker 总计 42.955 秒、推理 41.494 秒、峰值 reserved 8.924 GiB；Lo-fi 总计 39.589 秒、推理 39.222 秒、峰值 reserved 8.969 GiB。两个输出均为 48kHz 双声道 10.480 秒 WAV，前端可按变体独立展示。
