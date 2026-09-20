@@ -17,6 +17,7 @@ import time
 import urllib.parse
 import uuid
 import wave
+from array import array
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -313,7 +314,47 @@ def _normalize(source: Path, job_dir: Path) -> Path:
         )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         raise HTTPException(415, "Could not normalize uploaded audio") from exc
+    _duplicate_loudest_channel(target)
     return target
+
+
+def _duplicate_loudest_channel(path: Path) -> None:
+    """Make the official loader receive the same useful signal on both channels.
+
+    Mobile recordings can contain one strong microphone channel and one quiet
+    or noisy channel.  Mixing them with ``ffmpeg -ac 2`` would weaken the
+    humming signal, so the normalized PCM file deliberately duplicates the
+    louder channel.  The model still receives ordinary stereo WAV input.
+    """
+    try:
+        with wave.open(str(path), "rb") as reader:
+            channels = reader.getnchannels()
+            width = reader.getsampwidth()
+            rate = reader.getframerate()
+            frames = reader.readframes(reader.getnframes())
+        if channels != 2 or width != 2:
+            return
+        samples = array("h")
+        samples.frombytes(frames)
+        if len(samples) < 2:
+            return
+        left = samples[0::2]
+        right = samples[1::2]
+        left_energy = sum(value * value for value in left)
+        right_energy = sum(value * value for value in right)
+        selected = left if left_energy >= right_energy else right
+        output = array("h")
+        output.extend(value for sample in selected for value in (sample, sample))
+        with wave.open(str(path), "wb") as writer:
+            writer.setnchannels(2)
+            writer.setsampwidth(2)
+            writer.setframerate(rate)
+            writer.writeframes(output.tobytes())
+        _log(f"normalized stereo duplicated selected={'left' if left_energy >= right_energy else 'right'}")
+    except (OSError, wave.Error, OverflowError):
+        # The ffmpeg output remains valid even if a nonstandard WAV backend
+        # cannot be reopened; the Worker will report any actual decode issue.
+        return
 
 
 def _audio_seconds(path: Path) -> float | None:
