@@ -24,7 +24,6 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from diffsynth.core.data.operators import LoadMultiTrackAudio
-from diffsynth.core.vram.layers import AutoWrappedNonRecurseModule
 from diffsynth.diffusion.template import TemplatePipeline
 from diffsynth.pipelines.diffsynth_music import DiffSynthMusicPipeline, ModelConfig
 from diffsynth.utils.music_tools import extract_prosody
@@ -113,6 +112,23 @@ def _release_temporary_cuda_memory() -> None:
         torch.cuda.empty_cache()
 
 
+class _TemplateLayerCPUWrapper(torch.nn.Module):
+    """Keep one template transformer block on RAM between forward calls."""
+
+    def __init__(self, layer: torch.nn.Module):
+        super().__init__()
+        self.layer = layer.to(dtype=torch.bfloat16, device="cpu")
+
+    def forward(self, *args, **kwargs):
+        self.layer.to(dtype=torch.bfloat16, device="cuda")
+        try:
+            return self.layer(*args, **kwargs)
+        finally:
+            # The returned activations/KV tensors stay on CUDA; only the
+            # parameters move back, so the next block can use the same budget.
+            self.layer.to(dtype=torch.bfloat16, device="cpu")
+
+
 def _prepare_template_model(model: torch.nn.Module) -> torch.nn.Module:
     """Move template DiT blocks to CPU and page one block to CUDA per call.
 
@@ -127,23 +143,11 @@ def _prepare_template_model(model: torch.nn.Module) -> torch.nn.Module:
     if not isinstance(layers, torch.nn.ModuleList):
         return model
     for index, layer in enumerate(list(layers)):
-        wrapped = AutoWrappedNonRecurseModule(
-            layer,
-            offload_dtype=torch.bfloat16,
-            offload_device="cpu",
-            onload_dtype=torch.bfloat16,
-            onload_device="cpu",
-            preparing_dtype=torch.bfloat16,
-            preparing_device="cuda",
-            computation_dtype=torch.bfloat16,
-            computation_device="cuda",
-        )
         # load_template_model creates the template on CUDA.  Keep the small
         # root modules there, but put the repeated transformer blocks in RAM;
-        # AutoWrappedNonRecurseModule will make a temporary CUDA copy per
-        # forward and release it when the call returns.
-        wrapped.module.to(dtype=torch.bfloat16, device="cpu")
-        layers[index] = wrapped
+        # the wrapper explicitly moves one block to CUDA for its call and
+        # returns it to CPU even if a forward raises.
+        layers[index] = _TemplateLayerCPUWrapper(layer)
     model._h2m_template_cpu = True
     return model
 
