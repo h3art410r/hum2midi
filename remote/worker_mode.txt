@@ -1,1 +1,1 @@
-cpu
+dit_cuda
