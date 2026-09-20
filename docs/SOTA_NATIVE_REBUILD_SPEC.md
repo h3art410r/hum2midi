@@ -49,6 +49,8 @@
 
 模型调用必须使用官方 `TemplatePipeline` 和官方 Prosody template（`model_id=1`），不改写模型 forward，不加入自定义 MIDI、YIN、重绘锚点或额外伴奏混音。官方示例参数作为新版本的初始基线：`tiled=True`、`cfg_scale=4`、`num_inference_steps=50`、固定 `seed=42`，生成时长取实际 prosody 条件长度。
 
+第一阶段默认只启用 Prosody-only。Control、Reference 和联合条件暂不进入默认链路；在 16GB GPU 上只有经过独立显存实测并确认安全后，才允许作为后续实验启用。
+
 模型权重只部署在独立 GPU Worker，第一阶段目标机器是 RTX 5060 Ti 16GB；FastAPI 后端不加载模型，只通过清晰的 HTTP 模型适配接口调用 Worker。模型版本、权重来源和 Git 构建版本必须写入每个任务的诊断信息。
 
 实现中仍保留一个小而明确的 `MusicModel` 接口，接口的用途是隔离 Worker，而不是提前建设多模型平台。只有当 DiffSynth-Music 无法达到旋律身份门槛时，才另开实验文档评估替代模型，不在新版本中暗中切换。
