@@ -5,6 +5,7 @@
 - 用户决定不再沿用旧版后端代码和历史实现路径，单独建立一个全新版本。
 - 新版本以 `docs/SOTA_NATIVE_REBUILD_SPEC.md` 为边界：旧版 `app/`、`remote/`、脚本、MIDI/YIN、Stable Audio、Qwen、历史 prompt、显存魔改和缓存逻辑都不能作为新版本依赖。
 - 新版本先从空服务骨架实现真实音频到官方模型到音频输出的最小链路，再建立质量基线；旧版只用于历史对照，旧缓存不得冒充新结果。
+- 新版本当前确定的模型方案是 `DiffSynth-Music` 官方 Prosody + `TemplatePipeline`，官方基线参数为 `tiled=True`、CFG 4、50 steps、seed 42；模型只在独立 RTX 5060 Ti Worker 中运行，FastAPI 不加载模型。
 
 ## 2026-09-21：固定输入试听实验室
 

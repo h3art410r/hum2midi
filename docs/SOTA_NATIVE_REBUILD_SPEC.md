@@ -43,13 +43,15 @@
 
 输入预处理只做模型官方要求的操作：采样率、声道布局、长度对齐和必要的响度处理。不得在这里做旋律修正、歌曲识别或模板匹配。
 
-## 4. 模型方案
+## 4. 确定的模型方案
 
-### 4.1 第一候选
+当前新版本确定使用 `DiffSynth-Music` 的官方 Prosody 条件路径。它接收真实哼唱提取出的音频 prosody 条件和英文 prompt，由模型直接生成完整音乐，不把原始哼唱轨叠回输出。
 
-第一候选为 `DiffSynth-Music` 的官方 Prosody 条件路径。它接收音频 prosody 条件和文本 prompt，由模型直接生成完整音乐，不把原始哼唱轨叠回输出。
+模型调用必须使用官方 `TemplatePipeline` 和官方 Prosody template（`model_id=1`），不改写模型 forward，不加入自定义 MIDI、YIN、重绘锚点或额外伴奏混音。官方示例参数作为新版本的初始基线：`tiled=True`、`cfg_scale=4`、`num_inference_steps=50`、固定 `seed=42`，生成时长取实际 prosody 条件长度。
 
-当前只使用官方 `Prosody` template，模型调用参数由官方示例决定。实现中必须保留一个清晰的模型适配接口，方便后续替换其他 SOTA 音乐生成模型。
+模型权重只部署在独立 GPU Worker，第一阶段目标机器是 RTX 5060 Ti 16GB；FastAPI 后端不加载模型，只通过清晰的 HTTP 模型适配接口调用 Worker。模型版本、权重来源和 Git 构建版本必须写入每个任务的诊断信息。
+
+实现中仍保留一个小而明确的 `MusicModel` 接口，接口的用途是隔离 Worker，而不是提前建设多模型平台。只有当 DiffSynth-Music 无法达到旋律身份门槛时，才另开实验文档评估替代模型，不在新版本中暗中切换。
 
 ### 4.2 模型适配接口
 
