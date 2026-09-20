@@ -1,5 +1,14 @@
 # 当前决策（2026-09-18）
 
+## 2026-09-20：DiT 常驻 CUDA 性能 A/B
+
+- Worker 已按 `remote/worker_mode.txt` 使用 `DIFFSYNTH_OFFLOAD_MODE=dit_cuda` 启动，健康检查返回 RTX 5060 Ti、构建 `3d09604`，模型加载约 38.2 秒。
+- 同一段 10.943 秒录音、Control + Prosody、CFG 4、steps 10、seed 101、重绘强度 0.65 的真实任务 `f429f9bcc9fa42aea10af1c3adedfe2d` 成功完成。Worker 总耗时 196.759 秒，开发机观测到请求耗时 196.94 秒，输出 10.96 秒。
+- 细分耗时：正向模板 33.377 秒、负向模板 16.925 秒；输入音频编码 6.430 秒；DiT 首次切换 15.798 秒；10 个 denoise step 分别约 9.47–10.56 秒；VAE 解码 6.985 秒；保存 0.041 秒。
+- 该配置没有比之前 CPU offload 的约 197 秒实测明显变快。PyTorch 记录峰值 allocated 26.975GB、reserved 27.031GB，而显卡物理显存约 15.90GB，说明当前运行仍在承受显存超额/动态换入压力，不能视为完整驻留显存的安全模式；暂不尝试 `none`，避免无意义的 OOM。
+- 下一轮性能实验优先保持 `dit_cuda`，降低 steps 或做 CFG 4 与 CFG 1 的 A/B；当前每一步约 10 秒，固定模板与设备准备约占一半以上总耗时。
+- 同时修正 Worker 响应头 `X-DiffSynth-Conditioning-Seconds`：此前误填了整个请求耗时，现在只记录 `CONDITIONING_READY` 阶段，避免后端诊断误导。
+
 ## 2026-09-20：DiffSynth Worker 细粒度性能埋点
 
 - 同一段 10.943 秒录音在 Control + Prosody、CFG 4、steps 10 下，开发机侧确认上传与 ffmpeg 约 0.38 秒；Worker 请求分别为重绘锚点开启 153.318 秒、关闭 125.613 秒，输出均为约 10.96 秒。瓶颈在 GPU Worker 模型执行，不在公网、反向隧道或本地转码。

@@ -458,6 +458,7 @@ def generate(
         prosody = extract_prosody(waveform.mean(dim=0, keepdim=True))
         seconds = float(duration) if duration.strip() else prosody.shape[1] / 48000
         denoise = float(denoising_strength) if denoising_strength.strip() else None
+        conditioning_elapsed = time.perf_counter() - prep_started
         _worker_log(
             "CONDITIONING_READY",
             request_id,
@@ -465,7 +466,7 @@ def generate(
             control_shape=tuple(control_audio.shape),
             prosody_shape=tuple(prosody.shape),
             denoise=denoise if denoise is not None else "none",
-            elapsed=f"{time.perf_counter() - prep_started:.3f}s",
+            elapsed=f"{conditioning_elapsed:.3f}s",
         )
         if torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
@@ -526,7 +527,7 @@ def generate(
             filename="diffsynth-output.wav",
             headers={
                 "X-DiffSynth-Request-Id": request_id,
-                "X-DiffSynth-Conditioning-Seconds": f"{time.perf_counter() - prep_started:.3f}",
+                "X-DiffSynth-Conditioning-Seconds": f"{conditioning_elapsed:.3f}",
                 "X-DiffSynth-Inference-Seconds": f"{infer_elapsed:.3f}",
                 "X-DiffSynth-Save-Seconds": f"{save_elapsed:.3f}",
                 "X-DiffSynth-Total-Seconds": f"{total_elapsed:.3f}",
