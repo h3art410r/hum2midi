@@ -19,7 +19,7 @@
 - CPU 路径：LiteRT/XNNPACK；`STABLE_AUDIO_THREADS` 控制 CPU 线程数。具备 CUDA 环境时可单独评估官方 medium 路径，但本 Demo 默认使用 CPU 小模型。
 - 输入格式：M4A/MP4、WebM、WAV、MP3；服务端统一转 WAV 并做响度归一化。
 - 输出：每个任务生成与规范化输入同长的 `1.wav`，保持 44.1kHz 双声道；只有输入时长不可读时才使用 10 秒兜底。
-- 前端展示 Funk 的英文原文和中文参考；当前快速迭代参数固定为 Control + Prosody、CFG 4、steps 10、seed 101、denoising strength 0.65。用户通过试听结果和后端分段日志共同评估，不再显示运行参数面板。中文只供人阅读，模型始终接收英文 prompt。
+- 前端展示 Funk 的英文原文和中文参考；当前快速迭代参数固定为 Control + Prosody、CFG 4、steps 10、seed 101、denoising strength 0.85。用户通过试听结果和后端分段日志共同评估，不再显示运行参数面板。中文只供人阅读，模型始终接收英文 prompt。
 
 ## API
 

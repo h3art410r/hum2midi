@@ -129,7 +129,7 @@ async def create_generation(request: Request) -> JSONResponse:
     cfg_scale = request.headers.get("x-diffsynth-cfg-scale", "4").strip()
     steps = request.headers.get("x-diffsynth-steps", "10").strip()
     seed = request.headers.get("x-diffsynth-seed", "101").strip()
-    denoising_strength_raw = request.headers.get("x-diffsynth-denoising-strength", "0.65").strip()
+    denoising_strength_raw = request.headers.get("x-diffsynth-denoising-strength", "0.85").strip()
     denoising_strength = "" if denoising_strength_raw.lower() in {"off", "none", "disabled", "null"} else denoising_strength_raw
     if requested_preset:
         _backend_log(
@@ -326,7 +326,7 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
                     profile = job.get("control_profile", "control_prosody")
                     render_kwargs.update({
                         "control_profile": profile,
-                        "denoising_strength": float(job.get("denoising_strength", "0.65")) if job.get("denoising_strength") else None,
+                        "denoising_strength": float(job.get("denoising_strength", "0.85")) if job.get("denoising_strength") else None,
                         "cfg_scale": float(job.get("cfg_scale", "4")),
                         "steps": int(job.get("steps", "10")),
                         "seed": int(job.get("seed", "101")),
