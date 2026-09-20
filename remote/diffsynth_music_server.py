@@ -60,7 +60,7 @@ TEMPLATE_LAYER_CPU_OFFLOAD = os.getenv(
 ).strip().lower() not in {"0", "false", "no", "off"}
 QUANTIZE_TEMPLATE_KV = os.getenv(
     "DIFFSYNTH_QUANTIZE_TEMPLATE_KV",
-    "1" if OFFLOAD_MODE == "cpu" else "0",
+    "0",
 ).strip().lower() not in {"0", "false", "no", "off"}
 
 app = FastAPI(title="DiffSynth-Music Prosody Worker")
@@ -607,6 +607,9 @@ def health() -> dict[str, object]:
         "offload_mode": OFFLOAD_MODE,
         "vram_limit_gb": _vram_limit_gb() if torch.cuda.is_available() else None,
         "template_lazy_loading": TEMPLATE_LAZY_LOADING,
+        "template_layer_cpu_offload": TEMPLATE_LAYER_CPU_OFFLOAD,
+        "reuse_template_cache": REUSE_IDENTICAL_TEMPLATE_CACHE,
+        "quantize_template_kv": QUANTIZE_TEMPLATE_KV,
         "build": WORKER_BUILD,
         "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none",
         "model_id": MODEL_ID,
