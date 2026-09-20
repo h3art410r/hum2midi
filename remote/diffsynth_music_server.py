@@ -142,6 +142,7 @@ def _render_with_timings(
     original_unit_runner = PIPE.unit_runner
     original_vae_decode = PIPE.vae_output_to_audio
     original_load_models = PIPE.load_models_to_device
+    original_model_fn = PIPE.model_fn
 
     def timed_unit_runner(unit, *args, **unit_kwargs):
         unit_started = time.perf_counter()
@@ -173,6 +174,18 @@ def _render_with_timings(
         )
         return result
 
+    def timed_model_fn(*model_args, **model_kwargs):
+        forward_started = time.perf_counter()
+        result = original_model_fn(*model_args, **model_kwargs)
+        elapsed = time.perf_counter() - forward_started
+        _worker_log(
+            "DIT_FORWARD_DONE",
+            request_id,
+            step=model_kwargs.get("progress_id", "?"),
+            elapsed=f"{elapsed:.3f}s",
+        )
+        return result
+
     def timed_progress(iterable):
         iterator = iter(iterable)
         step_index = 0
@@ -199,6 +212,7 @@ def _render_with_timings(
     PIPE.unit_runner = timed_unit_runner
     PIPE.vae_output_to_audio = timed_vae_decode
     PIPE.load_models_to_device = timed_load_models
+    PIPE.model_fn = timed_model_fn
     try:
         model_started = time.perf_counter()
         result = PIPE(**kwargs)
@@ -207,6 +221,7 @@ def _render_with_timings(
         PIPE.unit_runner = original_unit_runner
         PIPE.vae_output_to_audio = original_vae_decode
         PIPE.load_models_to_device = original_load_models
+        PIPE.model_fn = original_model_fn
     _worker_log(
         "PIPE_DONE", request_id,
         elapsed=f"{timings['pipe_total_seconds']:.3f}s",
@@ -301,12 +316,12 @@ def load_models() -> None:
         torch_dtype=dtype, device="cuda", model_configs=_configs(),
         tokenizer_config=ModelConfig(model_id=MODEL_ID, origin_file_pattern="text_encoder/"),
         vram_limit=(
-            None
-            if OFFLOAD_MODE == "none"
+            float(os.getenv("DIFFSYNTH_VRAM_LIMIT_GB"))
+            if os.getenv("DIFFSYNTH_VRAM_LIMIT_GB")
             else (
-                float(os.getenv("DIFFSYNTH_VRAM_LIMIT_GB"))
-                if os.getenv("DIFFSYNTH_VRAM_LIMIT_GB")
-                else (torch.cuda.mem_get_info("cuda")[1] / (1024 ** 3) - 0.5)
+                None
+                if OFFLOAD_MODE in {"none", "dit_cuda"}
+                else torch.cuda.mem_get_info("cuda")[1] / (1024 ** 3) - 0.5
             )
         ),
     )
