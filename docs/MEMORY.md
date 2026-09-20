@@ -135,3 +135,11 @@
 - 固定输入、种子、CFG 和步数的首轮 A/B 只改变正向风格 prompt。只有确认可复现的具体伪影后，才允许把很短的实验性负向后缀作为独立变量，不能直接覆盖官方基线。
 - 论文和 pipeline 都支持 KV memory 复用。新后端先做一次官方 `extract_prosody` 和正/负模板 KV cache，再顺序用同一对 cache 生成 Funk、Lo-fi；两种风格共用同一条件，单模型常驻以避免 16GB 显存同时加载两套采样状态。缓存只在单任务生命周期内保留。
 - 已确认下一步的改动边界：只按官方 Quick Start 调整 Worker 的模型调用方式，不改模型权重、DiT 内部 forward 或常驻 daemon。Worker 代码推到 `main` 后由 daemon 自动拉取、重启模型子进程并健康检查；daemon 脚本本身不变。
+
+## 2026-09-21：全新 Native Prosody 入口首轮闭环
+
+- 新版本独立放在 `native/`，不从历史 `app/`、旧 MIDI 链路或旧 Stable Audio provider 导入。`native.api` 负责上传、任务清单、规范化和状态；`native.worker_server` 负责官方 DiffSynth-Music Prosody 推理。
+- 守护进程启动入口已切到 `scripts/start_native_diffsynth_worker.ps1`。守护进程脚本本身变更需要在 GPU 机器手动重启一次；之后模型代码提交会按原有轮询机制自动拉取、重启 Worker 子进程并健康检查。
+- 新前端一次创建 Funk 和 Lo-fi 两个顺序变体；任一变体完成就先展示，两个变体共用官方 Prosody 参数基线，实际发送的英文 prompt 和模型诊断写入任务清单。
+- 本地编译、FastAPI 路由、PowerShell 解析检查均通过。用真实 `1-哼唱.m4a`（10.516 秒）对当前远端 Worker 做协议冒烟测试：输入对齐到 10.480 秒，steps=1 时 Funk 39.137 秒、Lo-fi 29.265 秒，输出均为 48kHz 双声道 10.480 秒 WAV，Worker 峰值 reserved 约 8.97 GiB。该结果验证了新后端协议和先出先展示逻辑，不代表官方 50 steps 的最终听感基线。
+- 当前主分支提交 `d5a7fe2` 已推送到远端仓库；GPU 机器健康接口仍显示旧构建，需重启其 daemon 后才会切换到新 Worker 入口。
