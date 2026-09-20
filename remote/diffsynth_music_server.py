@@ -117,6 +117,9 @@ class _TemplateLayerCPUWrapper(torch.nn.Module):
 
     def __init__(self, layer: torch.nn.Module):
         super().__init__()
+        # MusicKVCacheModel checks this attribute to decide which blocks
+        # should return KV pairs.
+        self.window_size = getattr(layer, "window_size", None)
         self.layer = layer.to(dtype=torch.bfloat16, device="cpu")
 
     def forward(self, *args, **kwargs):
