@@ -23,16 +23,12 @@ PROMPT_PLANS = {
     "1": {
         "name": "Funk",
         "description": "保留原始旋律和节奏，转换成完整的器乐 Funk 编曲。",
-        "noise": 0.40,
+        # Kept for the local Stable Audio compatibility path. The active
+        # DiffSynth worker receives the explicit denoising_strength request
+        # parameter from the web app.
+        "noise": 0.65,
         "prompt": "Create a polished instrumental funk track from the input humming. Keep the original melody, phrasing, and rhythmic identity clearly recognizable. Replace the raw humming with a strong bass groove, syncopated drums, rhythmic guitar, tight keyboard accents, and a catchy musical arrangement. Make it energetic, stylish, and memorable. Do not keep the original vocal recording or its background noise.",
         "translation": "根据输入哼唱创作一首完整的器乐 Funk 音乐。清楚保留原始旋律、乐句和节奏身份，用有力度的贝斯律动、切分鼓点、节奏吉他、键盘点缀和抓耳编曲替换原始哼唱。整体要有能量、有风格、有记忆点，不保留原始人声或底噪。",
-    },
-    "2": {
-        "name": "Lo-fi",
-        "description": "保留原始旋律和节奏，转换成温暖耐听的器乐 Lo-fi 编曲。",
-        "noise": 0.40,
-        "prompt": "Create a polished instrumental lo-fi track from the input humming. Keep the original melody, phrasing, and rhythmic identity clearly recognizable. Replace the raw humming with warm chords, a relaxed but precise drum groove, mellow bass, dusty keys, subtle texture, and an emotionally memorable arrangement. Make it intimate, modern, and replayable. Do not keep the original vocal recording or its background noise.",
-        "translation": "根据输入哼唱创作一首完整的器乐 Lo-fi 音乐。清楚保留原始旋律、乐句和节奏身份，用温暖和弦、松弛但准确的鼓组、柔和贝斯、带颗粒感的键盘和细微质感替换原始哼唱。整体要亲密、现代、耐听，不保留原始人声或底噪。",
     },
 }
 
@@ -42,7 +38,9 @@ PROMPT_TRANSLATIONS = {plan_id: {"transform": plan["translation"]} for plan_id, 
 STYLE_PROMPTS = {
     "transform": PROMPT_PLANS["1"]["prompt"],
     "funk": PROMPT_PLANS["1"]["prompt"],
-    "lofi": PROMPT_PLANS["2"]["prompt"],
+    # Keep the old alias importable for small offline scripts. The product
+    # now exposes one Funk plan and never generates a second style.
+    "lofi": PROMPT_PLANS["1"]["prompt"],
 }
 
 

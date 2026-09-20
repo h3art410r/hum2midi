@@ -89,7 +89,7 @@ async def health() -> dict[str, Any]:
 
 @app.get("/api/prompt-presets")
 async def prompt_presets() -> dict[str, Any]:
-    """Expose five vertical transformation plans and human translations."""
+    """Expose the single Funk transformation plan and human translation."""
     return {
         "plans": [
             {
@@ -107,10 +107,15 @@ async def prompt_presets() -> dict[str, Any]:
 
 @app.post("/api/generations", status_code=202)
 async def create_generation(request: Request) -> JSONResponse:
+    request_started = time.perf_counter()
     _backend_log(
         f"POST /api/generations received content_type={request.headers.get('content-type', '')}"
     )
+    body_started = time.perf_counter()
     audio = await request.body()
+    _backend_log(
+        f"request body read bytes={len(audio)} elapsed={time.perf_counter() - body_started:.3f}s"
+    )
     if not audio:
         _backend_log("upload rejected: empty request", level="ERROR")
         raise HTTPException(400, "No audio data received")
@@ -120,13 +125,14 @@ async def create_generation(request: Request) -> JSONResponse:
 
     filename = request.headers.get("x-audio-filename", "hum.m4a")
     requested_preset = request.headers.get("x-style-preset", "").strip()
-    control_profile = request.headers.get("x-diffsynth-control-profile", "prosody").strip()
+    control_profile = request.headers.get("x-diffsynth-control-profile", "control_prosody").strip()
     cfg_scale = request.headers.get("x-diffsynth-cfg-scale", "4").strip()
-    steps = request.headers.get("x-diffsynth-steps", "50").strip()
+    steps = request.headers.get("x-diffsynth-steps", "10").strip()
     seed = request.headers.get("x-diffsynth-seed", "101").strip()
+    denoising_strength = request.headers.get("x-diffsynth-denoising-strength", "0.65").strip()
     if requested_preset:
         _backend_log(
-            f"legacy preset header ignored; generating all vertical plans requested={requested_preset}",
+            f"legacy preset header ignored; generating the Funk plan requested={requested_preset}",
             level="WARN",
         )
     suffix = Path(filename).suffix.lower()
@@ -145,9 +151,14 @@ async def create_generation(request: Request) -> JSONResponse:
     job_dir.mkdir(parents=True)
     raw_path = job_dir / f"source{suffix}"
     raw_path.write_bytes(audio)
+    _backend_log(
+        f"runtime parameters profile={control_profile} cfg={cfg_scale} steps={steps} "
+        f"seed={seed} denoising_strength={denoising_strength}",
+        job_id=job_id,
+    )
     _backend_log("normalizing input with ffmpeg", job_id=job_id)
     try:
-        source_path = _to_wav(raw_path)
+        source_path = _to_wav(raw_path, job_id=job_id)
     except HTTPException as exc:
         _backend_log(f"ffmpeg normalization failed: {exc.detail}", job_id=job_id, level="ERROR")
         raise
@@ -157,12 +168,13 @@ async def create_generation(request: Request) -> JSONResponse:
         "status": "queued",
         "message": "正在准备音乐模型生成…",
         "provider": _make_provider().status(),
-        "plan": "all",
-        "plan_name": "Funk 和 Lo-fi",
+        "plan": "funk",
+        "plan_name": "Funk",
         "control_profile": control_profile,
         "cfg_scale": cfg_scale,
         "steps": steps,
         "seed": seed,
+        "denoising_strength": denoising_strength,
         "plans": [
             {"id": plan_id, "name": plan["name"], "description": plan["description"], "noise": plan["noise"]}
             for plan_id, plan in PROMPT_PLANS.items()
@@ -177,15 +189,25 @@ async def create_generation(request: Request) -> JSONResponse:
         "source_path": str(source_path),
     }
     (job_dir / "prompt_snapshot.json").write_text(json.dumps({
-        "plan": "all",
+        "plan": "funk",
         "plans": JOBS[job_id]["plans"],
         "prompts": JOBS[job_id]["prompts"],
         "translations": JOBS[job_id]["prompt_translations"],
         "seed": StableAudioClient().config.seed,
         "noise": StableAudioClient().config.init_noise_level,
+        "runtime": {
+            "control_profile": control_profile,
+            "cfg_scale": cfg_scale,
+            "steps": steps,
+            "seed": seed,
+            "denoising_strength": denoising_strength,
+        },
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     asyncio.create_task(_run_generation(job_id, source_path, job_dir))
-    _backend_log("job queued; returning 202 for Funk and Lo-fi plans", job_id=job_id)
+    _backend_log(
+        f"job queued; returning 202 for Funk plan request_elapsed={time.perf_counter() - request_started:.3f}s",
+        job_id=job_id,
+    )
     return JSONResponse({"id": job_id, "status": "queued"}, status_code=202)
 
 
@@ -231,21 +253,31 @@ async def get_source(job_id: str) -> FileResponse:
 
 
 async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
+    run_started = time.perf_counter()
     job = JOBS[job_id]
-    provider = _make_provider()
-    job["provider"] = provider.status()
-    _backend_log(
-        f"worker started provider={provider.status()} plans={len(PROMPT_PLANS)}",
-        job_id=job_id,
-    )
     try:
+        provider_started = time.perf_counter()
+        provider = _make_provider()
+        provider_status = provider.status()
+        job["provider"] = provider_status
+        _backend_log(
+            f"worker started provider={provider_status} plans={len(PROMPT_PLANS)} "
+            f"setup_seconds={time.perf_counter() - provider_started:.3f}",
+            job_id=job_id,
+        )
         if isinstance(provider, StableAudioClient) and not provider.script.is_file():
             _backend_log(f"Stable Audio CLI missing: {provider.script}", job_id=job_id, level="ERROR")
             raise StableAudioError(
                 f"Stable Audio CLI not found: {provider.script}. "
                 "Set STABLE_AUDIO_ROOT to optimized/tflite."
             )
+        duration_started = time.perf_counter()
         input_seconds = StableAudioClient.audio_seconds(audio_path)
+        _backend_log(
+            f"input duration probe seconds={input_seconds} "
+            f"elapsed={time.perf_counter() - duration_started:.3f}s",
+            job_id=job_id,
+        )
         if input_seconds is None:
             input_seconds = getattr(getattr(provider, "config", None), "output_seconds", 10.0)
             _backend_log(
@@ -264,14 +296,25 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
             variant_id = plan_id
             job["message"] = f"音乐模型正在生成方案 {plan['name']}（{completed_variants}/{total_variants}）…"
             _backend_log(
-                f"generation started plan={plan_id} noise={plan['noise']}",
+                f"generation started plan={plan_id} name={plan['name']} noise={plan['noise']} "
+                f"profile={job.get('control_profile')} cfg={job.get('cfg_scale')} "
+                f"steps={job.get('steps')} seed={job.get('seed')} "
+                f"denoising_strength={job.get('denoising_strength')}",
                 job_id=job_id,
             )
             logger.info(
-                "audio_provider_start job=%s plan=%s noise=%s provider=%s",
+                "audio_provider_start job=%s plan=%s noise=%s provider=%s profile=%s cfg=%s steps=%s seed=%s denoise=%s",
                 job_id, plan_id, plan["noise"], provider.status(),
+                job.get("control_profile"), job.get("cfg_scale"), job.get("steps"),
+                job.get("seed"), job.get("denoising_strength"),
             )
             output_path = job_dir / f"{variant_id}.wav"
+            render_started = time.perf_counter()
+            _backend_log(
+                f"provider.render start plan={plan_id} output={output_path.name} "
+                f"input_seconds={input_seconds} prompt_chars={len(plan['prompt'])}",
+                job_id=job_id,
+            )
             try:
                 render_kwargs = {
                     "output_seconds": input_seconds,
@@ -279,18 +322,19 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
                     "init_noise_level": plan["noise"],
                 }
                 if isinstance(provider, DiffSynthRemoteClient):
-                    profile = job.get("control_profile", "prosody")
+                    profile = job.get("control_profile", "control_prosody")
                     render_kwargs.update({
                         "control_profile": profile,
-                        "denoising_strength": 0.25 if profile == "anchored_low" else 0.45 if profile == "anchored_medium" else None,
+                        "denoising_strength": float(job.get("denoising_strength", "0.65")) if job.get("denoising_strength") else None,
                         "cfg_scale": float(job.get("cfg_scale", "4")),
-                        "steps": int(job.get("steps", "50")),
+                        "steps": int(job.get("steps", "10")),
                         "seed": int(job.get("seed", "101")),
                     })
                 diagnostics = await asyncio.to_thread(provider.render, audio_path, "transform", output_path, **render_kwargs)
             except Exception as exc:
+                render_elapsed = time.perf_counter() - render_started
                 _backend_log(
-                    f"generation failed plan={plan_id}: {_friendly_error(exc)}",
+                    f"generation failed plan={plan_id} elapsed={render_elapsed:.3f}s: {_friendly_error(exc)}",
                     job_id=job_id,
                     level="ERROR",
                 )
@@ -302,6 +346,14 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
                     "error": _friendly_error(exc),
                 }
                 continue
+            render_elapsed = time.perf_counter() - render_started
+            diagnostics = dict(diagnostics or {})
+            diagnostics.setdefault("elapsed_seconds", round(render_elapsed, 3))
+            diagnostics.setdefault("requested_profile", job.get("control_profile"))
+            diagnostics.setdefault("requested_cfg_scale", float(job.get("cfg_scale", "4")))
+            diagnostics.setdefault("requested_steps", int(job.get("steps", "10")))
+            diagnostics.setdefault("requested_seed", int(job.get("seed", "101")))
+            diagnostics.setdefault("requested_denoising_strength", float(job.get("denoising_strength", "0.65")))
             job["variants"][variant_id] = {
                 "plan": plan_id,
                 "plan_name": plan["name"],
@@ -313,7 +365,9 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
             }
             completed_variants += 1
             _backend_log(
-                f"generation completed plan={plan_id} noise={plan['noise']} seconds={diagnostics.get('seconds')} bytes={diagnostics.get('bytes')}",
+                f"provider.render done plan={plan_id} elapsed={render_elapsed:.3f}s "
+                f"output_seconds={diagnostics.get('seconds')} bytes={diagnostics.get('bytes')} "
+                f"transport_seconds={diagnostics.get('request_seconds')}",
                 job_id=job_id,
             )
             logger.info(
@@ -322,11 +376,14 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
             )
         if all(item.get("status") == "completed" for item in job["variants"].values()) and len(job["variants"]) == total_variants:
             job["status"] = "completed"
-            job["message"] = "五种纵向方案音频已生成"
-            _backend_log("job completed: all five vertical plans ready", job_id=job_id)
+            job["message"] = "Funk 音频已生成"
+            _backend_log(
+                f"job completed: Funk ready total_seconds={time.perf_counter() - run_started:.3f}",
+                job_id=job_id,
+            )
         else:
             job["status"] = "failed"
-            job["message"] = "纵向方案生成失败"
+            job["message"] = "Funk 生成失败"
             job["error"] = "; ".join(
                 item.get("error", "unknown")
                 for item in job["variants"].values()
@@ -339,10 +396,16 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
         job["error"] = _friendly_error(exc)
         job["message"] = "音乐模型生成失败"
         _backend_log(f"worker crashed: {job['error']}", job_id=job_id, level="ERROR")
+    finally:
+        _backend_log(
+            f"generation task exit status={job.get('status')} total_seconds={time.perf_counter() - run_started:.3f}",
+            job_id=job_id,
+        )
 
 
-def _to_wav(source: Path) -> Path:
+def _to_wav(source: Path, *, job_id: str | None = None) -> Path:
     target = source.parent / "audio_44k_stereo.wav"
+    started = time.perf_counter()
     try:
         ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
         subprocess.run(
@@ -358,6 +421,11 @@ def _to_wav(source: Path) -> Path:
         )
     except Exception as exc:
         raise HTTPException(415, "Could not convert browser recording to WAV") from exc
+    _backend_log(
+        f"ffmpeg normalization done elapsed={time.perf_counter() - started:.3f}s "
+        f"output_bytes={target.stat().st_size}",
+        job_id=job_id,
+    )
     return target
 
 

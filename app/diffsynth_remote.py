@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import os
+import logging
+import time
 import urllib.error
 import urllib.request
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+
+
+logger = logging.getLogger(__name__)
 
 
 class DiffSynthRemoteError(RuntimeError):
@@ -87,6 +92,7 @@ class DiffSynthRemoteClient:
             "steps": "" if steps is None else str(steps),
         }
         body, content_type = _multipart(fields, "audio", source.name, source.read_bytes(), "audio/wav")
+        request_started = time.perf_counter()
         try:
             response = self._raw_request("POST", "/v1/generate", body, content_type)
         except urllib.error.HTTPError as exc:
@@ -98,12 +104,26 @@ class DiffSynthRemoteClient:
         output.write_bytes(response.data)
         if not output.stat().st_size:
             raise DiffSynthRemoteError("DiffSynth worker returned an empty audio file")
+        request_seconds = round(time.perf_counter() - request_started, 3)
+        logger.info(
+            "diffsynth_remote_complete url=%s profile=%s cfg=%s steps=%s seed=%s denoise=%s "
+            "request_seconds=%s response_bytes=%s output_bytes=%s",
+            self.config.url, control_profile, cfg_scale, steps, seed,
+            denoising_strength, request_seconds, len(response.data), output.stat().st_size,
+        )
         return {
             "provider": self.status(),
-            "control": "prosody",
+            "control": "control+prosody",
             "seconds": _wav_seconds(output),
             "requested_seconds": output_seconds,
             "bytes": output.stat().st_size,
+            "request_seconds": request_seconds,
+            "response_bytes": len(response.data),
+            "requested_control_profile": control_profile,
+            "requested_cfg_scale": cfg_scale,
+            "requested_steps": steps,
+            "requested_seed": seed,
+            "requested_denoising_strength": denoising_strength,
         }
 
     def _request(self, method: str, path: str) -> object:
