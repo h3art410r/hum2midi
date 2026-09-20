@@ -36,7 +36,7 @@ DIFFSYNTH_REMOTE_TOKEN=与服务端相同的token
 
 ## 当前实现边界
 
-- 由于 RTX 5060 Ti 16GB 的 Windows 显存限制，当前 worker 只开放 Prosody 和两档 input-audio 锚定；Control/Reference 模板暂不加载，前端不会显示不可用的组合。
+- 当前 worker 加载 `template_control` 和 `template_prosody`，提供 Control + Prosody 联合条件以及两档 input-audio 锚定；`template_reference` 暂不加载。Windows 16GB 机器使用 CPU/offload 配置，启动时必须观察显存峰值。
 - worker 只加载 `template_prosody`，不加载 `template_control` 和 `template_reference`；Prosody 模板常驻显存，主模型使用官方 low-VRAM 磁盘 offload 配置，以适配 16GB 显存的 RTX 5060 Ti。
 - 五个前端方案会依次调用同一个远端 worker，因此首次实验会消耗较长时间；可通过 `DIFFSYNTH_STEPS` 和 `DIFFSYNTH_CFG_SCALE` 调整质量/速度。
 - 5060Ti 16G 是否能在目标时长和步数下稳定运行，需要在目标机实测；服务启动时会检查 CUDA，显存峰值会打印到 worker 日志。

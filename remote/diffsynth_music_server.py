@@ -94,6 +94,7 @@ def load_models() -> None:
     TEMPLATE = TemplatePipeline.from_pretrained(
         torch_dtype=dtype, device="cuda",
         model_configs=[
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="template_control/"),
             ModelConfig(model_id=MODEL_ID, origin_file_pattern="template_prosody/"),
         ],
     )
@@ -134,7 +135,7 @@ async def generate(
         raise HTTPException(401, "Invalid worker token")
     if control != "prosody":
         raise HTTPException(400, "This worker currently uses the prosody endpoint")
-    if control_profile not in {"prosody", "anchored_low", "anchored_medium"}:
+    if control_profile not in {"prosody", "control_prosody", "anchored_low", "anchored_medium"}:
         raise HTTPException(400, "Unknown control_profile")
     load_models()
     suffix = Path(audio.filename or "input.wav").suffix or ".wav"
@@ -164,9 +165,18 @@ async def generate(
             tiled=True,
             cfg_scale=float(cfg_scale) if cfg_scale.strip() else float(os.getenv("DIFFSYNTH_CFG_SCALE", "4")),
             num_inference_steps=int(steps) if steps.strip() else int(os.getenv("DIFFSYNTH_STEPS", "50")),
-            # Only template_prosody is resident on this 16GB GPU.
-            template_inputs=[{"model_id": 0, "audio": prosody}],
-            negative_template_inputs=[{"model_id": 0, "audio": prosody}],
+            # Template model IDs follow the official DiffSynth-Music layout:
+            # 0 = Control (vocal onset/rhythm), 1 = Prosody (pitch/timing).
+            template_inputs=(
+                [{"model_id": 0, "audio": waveform}, {"model_id": 1, "audio": prosody}]
+                if control_profile != "prosody"
+                else [{"model_id": 1, "audio": prosody}]
+            ),
+            negative_template_inputs=(
+                [{"model_id": 0, "audio": waveform}, {"model_id": 1, "audio": prosody}]
+                if control_profile != "prosody"
+                else [{"model_id": 1, "audio": prosody}]
+            ),
             input_audio=waveform if denoise is not None else None,
             denoising_strength=denoise if denoise is not None else 1.0,
         )
