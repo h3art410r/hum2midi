@@ -110,7 +110,7 @@
       if (!file) { status.textContent = '请先选择音频文件。'; return; }
       submit.disabled = true; results.innerHTML = ''; bar.style.width = '0%'; status.textContent = '正在提交真实哼唱…';
       try {
-        const response = await request('/api/generations', {method:'POST', headers:{'Content-Type':file.type || 'audio/wav','X-Audio-Filename':file.name}, body:file});
+        const response = await request('/api/generations', {method:'POST', headers:{'Content-Type':file.type || 'audio/wav','X-Audio-Filename':encodeURIComponent(file.name)}, body:file});
         const created = await response.json(); if (!response.ok) throw new Error(created.detail || `HTTP ${response.status}`);
         log('JOB', created.id); await pollJob(created.id);
       } catch (error) { status.textContent = `生成失败：${error.message}`; log('ERROR', error.message); }

@@ -14,6 +14,7 @@ import os
 import shutil
 import subprocess
 import time
+import urllib.parse
 import uuid
 import wave
 from datetime import datetime, timezone
@@ -134,7 +135,8 @@ async def create_generation(request: Request) -> JSONResponse:
         raise HTTPException(400, "No audio data received")
     if len(body) > MAX_UPLOAD:
         raise HTTPException(413, f"Audio exceeds {MAX_UPLOAD // (1024 * 1024)} MB")
-    filename = request.headers.get("x-audio-filename", "hum.m4a")
+    encoded_filename = request.headers.get("x-audio-filename", "hum.m4a")
+    filename = urllib.parse.unquote(encoded_filename) or "hum.m4a"
     suffix = Path(filename).suffix.lower()
     if suffix not in {".m4a", ".mp4", ".wav", ".mp3", ".webm", ".ogg"}:
         raise HTTPException(415, "Use M4A, MP4, WAV, MP3, WebM, or OGG audio")
