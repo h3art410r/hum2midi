@@ -134,7 +134,7 @@ async def generate(
         raise HTTPException(401, "Invalid worker token")
     if control != "prosody":
         raise HTTPException(400, "This worker currently uses the prosody endpoint")
-    if control_profile not in {"prosody", "control_prosody", "anchored_low", "anchored_medium"}:
+    if control_profile not in {"prosody", "anchored_low", "anchored_medium"}:
         raise HTTPException(400, "Unknown control_profile")
     load_models()
     suffix = Path(audio.filename or "input.wav").suffix or ".wav"
