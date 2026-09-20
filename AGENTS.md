@@ -11,7 +11,7 @@
 
 ## 技术约束
 - 后端使用 Python。优先保持简单，避免为 Demo 引入不必要的服务、数据库或抽象层。
-- 新版本音频生成必须调用 GPU Worker 上的 DiffSynth-Music 官方 Prosody TemplatePipeline。模型不可用时必须明确失败，不得静默切换到其他模型或 mock 输出。
+- 新版本音频生成必须调用 GPU Worker 上的 DiffSynth-Music 官方 TemplatePipeline，默认使用 Control + Prosody 联合条件。模型不可用时必须明确失败，不得静默切换到其他模型或 mock 输出。
 - 新版本音频从输入到风格化输出直接走官方 Prosody 音频条件，不引入 MIDI、YIN 或旧版 Stable Audio 作为中间层。
 - 新版本代码位于 `native/`，不从历史 `app/` 或 `remote/` 模块导入；历史实现仅作对照和归档。
 - 云模型凭据只能从环境变量或安全的运行时配置读取；不得提交密钥或将其写入文档、日志和前端代码。

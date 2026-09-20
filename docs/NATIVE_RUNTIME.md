@@ -39,13 +39,13 @@ git pull --ff-only origin main
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_diffsynth_worker_daemon.ps1 -Port 8765 -PollSeconds 30
 ```
 
-不要同时启动旧的 `remote.diffsynth_music_server` 和新 Worker。新守护进程启动的是 `native.worker_server:app`，运行官方 Prosody-only Quick Start：
+不要同时启动旧的 `remote.diffsynth_music_server` 和新 Worker。新守护进程启动的是 `native.worker_server:app`，运行官方 TemplatePipeline Quick Start 的 Prosody + Control 联合条件：
 
 - `LoadMultiTrackAudio(division_factor=3840)`；
 - 直接对哼唱调用 `extract_prosody`，不做 vocal 分离；
-- `TemplatePipeline` 的 Prosody `model_id=1`；
+- `TemplatePipeline` 的 Control `model_id=0` 加 Prosody `model_id=1` 联合条件；Control 从规范化哼唱波形提供起音/节奏信息，Prosody 从同一波形生成保留音高与时间的正弦条件；
 - `pipe.default_negative_prompt` 和同一份 Prosody 负向模板；
-- 默认 `tiled=True`、CFG 4、50 steps、seed 42、输出时长等于 Prosody 条件时长；
+- 两条条件分别编码后由官方 `TemplatePipeline` 拼接 KV memory，不拼接波形、不使用 `target_audio`，因此不会把原始哼唱直接混回输出；默认 `tiled=True`、CFG 4、50 steps、seed 42、输出时长等于 Prosody 条件时长；
 - 输出通过 `soundfile` 保存为 48kHz PCM WAV，避免 TorchCodec 可选依赖导致保存失败。
 - 如果当前 `torchaudio` 安装把读取转发到缺失的 TorchCodec，Worker 会记录该事件并用 `soundfile` 读取已经规范化的 PCM WAV；张量形状、48kHz 和 3840 对齐保持与官方加载器一致。
 
@@ -70,4 +70,4 @@ http://192.168.9.100:8765/debug/logs?limit=200
 
 ## 当前边界
 
-第一阶段只启用 Prosody-only，Funk 和 Lo-fi 顺序运行以适应 16GB 显存。Control、Reference、联合条件、FP8 和自定义 KV cache 都不在默认路径中；任何后续优化都必须在固定录音和固定 seed 下与这条官方基线 A/B 对照。
+当前默认启用官方 Prosody + Control 联合条件，Funk 和 Lo-fi 顺序运行以适应 16GB 显存。Worker 仍保留 `control=prosody` 与 `control=control` 两个 A/B 模式；联合模式单次 10 秒输入的实测峰值约 15.9 GiB，已经接近 16GB 上限，若显存不足可通过 `NATIVE_CONTROL=prosody` 回退。没有引入自定义采样、KV cache 拼接或 offload 逻辑；联合 KV memory 由官方 `TemplatePipeline` 完成。

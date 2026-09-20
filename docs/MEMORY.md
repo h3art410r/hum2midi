@@ -96,6 +96,13 @@
 
 # 项目记忆
 
+## 2026-09-21：Prosody-only 对旋律/节奏保持不足
+
+- 官方论文把 Control 和 Prosody 定义为可组合的独立 KV 条件：Control 负责 beats/vocals/accompaniment 的起音与节奏，Prosody 负责正弦重合成后的音高和时间；联合时拼接各自的 KV memory，而不是拼接输入波形。
+- 当前默认 Worker 从同一份规范化哼唱同时生成 `model_id=0` Control 和 `model_id=1` Prosody，仍使用官方 `TemplatePipeline`、模型默认负向 prompt、CFG 4、50 steps、固定 seed 42、时长匹配 Prosody。
+- 在真实 `1-哼唱.m4a`（10.516 秒）上用固定 seed、10 steps 做 A/B：Prosody-only 峰值约 8.9 GiB、推理约 34.6 秒；Control-only 峰值约 9.0 GiB、推理约 32.0 秒；联合条件峰值约 15.9 GiB、推理约 76.8 秒，成功完成。联合条件用于先验证旋律/节奏身份，显存不足时可回退 `NATIVE_CONTROL=prosody`。
+- 这不是把人声轨混回成品：未传 `target_audio`/`target_track`，只把原始哼唱分别编码为官方 Control/Prosody 条件。后续听感仍需用同一段录音试听确认，不能用频谱代理分数代替人工判断。
+
 ## 2026-09-17：Stable Audio 本地音频闭环
 
 - 主流程是：真实录音 → ffmpeg 归一化为 44.1kHz 双声道 WAV → Stable Audio 3 TFLite `sm-music` audio-to-audio → 五个纵向方案 WAV。

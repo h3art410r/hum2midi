@@ -49,7 +49,7 @@
 
 模型调用必须使用官方 `TemplatePipeline` 和官方 Prosody template（`model_id=1`），不改写模型 forward，不加入自定义 MIDI、YIN、重绘锚点或额外伴奏混音。官方示例参数作为新版本的初始基线：`tiled=True`、`cfg_scale=4`、`num_inference_steps=50`、固定 `seed=42`，生成时长取实际 prosody 条件长度。
 
-第一阶段默认只启用 Prosody-only。Control、Reference 和联合条件暂不进入默认链路；在 16GB GPU 上只有经过独立显存实测并确认安全后，才允许作为后续实验启用。
+第一阶段先用 Prosody-only 建立基线；实测确认联合条件可运行后，当前默认改为官方 Prosody + Control。Control、Reference 和联合条件仍通过 Worker 的 `control` 参数保留为可复现 A/B，不允许引入自定义采样逻辑。
 
 模型权重只部署在独立 GPU Worker，第一阶段目标机器是 RTX 5060 Ti 16GB；FastAPI 后端不加载模型，只通过清晰的 HTTP 模型适配接口调用 Worker。模型版本、权重来源和 Git 构建版本必须写入每个任务的诊断信息。
 
@@ -81,7 +81,7 @@ class MusicModel:
 
 官方文档：<https://diffsynth-studio-doc.readthedocs.io/en/latest/Model_Details/DiffSynth-Music.html>。官方 Quick Start 的共同流程是：加载基础 `DiffSynthMusicPipeline`，加载三个 template 权重，准备某一种控制音频，调用 `TemplatePipeline`，最后以 48kHz 保存输出。
 
-官方 Prosody-only 管线的等价最小代码如下。代码保留官方调用语义，省略服务端队列和 HTTP 封装：
+官方 Prosody-only 管线的等价最小代码如下。代码保留官方调用语义，省略服务端队列和 HTTP 封装。当前为改善哼唱的起音/节奏保持，在同一 `TemplatePipeline` 调用中按论文的联合条件规则增加 `model_id=0` Control；Prosody-only 仍保留用于 A/B：
 
 ```python
 import torch
@@ -187,7 +187,7 @@ soft bass, subtle texture, and a memorable arrangement.
 - `native/static/index.html`：手机优先页面和 `?debug=16x9` 桌面调试视图；
 - `scripts/run_diffsynth_worker_daemon.ps1`：常驻守护进程现在启动 `native.worker_server:app`，并在主分支更新后自动重启模型子进程。
 
-这一步先按官方基线顺序生成两个风格，不启用 Control、Reference、联合条件或自定义 KV cache。共享 Prosody 条件的进一步缓存只有在官方接口和固定录音 A/B 证明不改变效果后才进入后续实验。
+这一步按官方接口顺序生成两个风格，共用同一份 Control + Prosody 条件，不启用 Reference、`target_audio` 或自定义 KV cache。共享条件只在单任务生命周期内复用，Funk 和 Lo-fi 仍顺序运行以适应显存。
 
 ### 6.1 负向 Prompt 的来源与生成规则
 
@@ -235,11 +235,11 @@ audio = template(
 
 ### 6.3 三类条件的分工
 
-- **Control**：论文把 beats、vocals、accompaniment 放在这个模板中。它们是时间对齐的条件，其中 vocals 更接近旋律和演唱表现，beats 更直接表达节拍事件。
+- **Control**：论文把 beats、vocals、accompaniment 放在这个模板中。它们是时间对齐的条件，其中 vocals 更接近旋律和演唱表现，beats 更直接表达节拍事件。本项目把规范化哼唱波形直接作为 Control 条件，不使用 `target_audio`，让模型只读取起音/节奏与演唱表现而不把原始轨混入成品。
 - **Prosody**：表达音高和时间，减少语言和音色线索，适合把哼唱变成器乐旋律。
 - **Reference**：从最响的连续片段取参考，表达整体风格、音色和制作质感，不负责把事件对齐到输出时间轴。
 
-这些条件在推理时组合的是 KV memory，不是把多条波形直接相加。论文明确允许联合条件；但官方示例只使用 Prosody，因此新版本先以 Prosody-only 建立干净基线，再单独验证 Control + Prosody，不能把两种结果混称为官方基线。
+这些条件在推理时组合的是 KV memory，不是把多条波形直接相加。论文明确允许联合条件；官方示例给出各模板的独立调用，新版本的联合调用只把这两个官方 `model_id` 放入同一 `TemplatePipeline`，并保持官方负向模板分支。
 
 ### 6.4 论文实验对我们的限制
 
@@ -250,7 +250,7 @@ audio = template(
 ### 6.5 对新版本的直接结论
 
 1. 不能用更长的文字 prompt 补偿缺失的音频控制；prompt 负责风格，音频条件负责旋律和时间。
-2. 如果 Prosody-only 听不出哼唱节奏，下一项合理实验是按论文定义加入 Control 条件，而不是修改 MIDI 或把原始音频混回输出。
+2. 如果 Prosody-only 听不出哼唱节奏，按论文定义加入 Control 条件；不要修改 MIDI 或把原始音频混回输出。
 3. Reference 只用于风格/音色实验，不能用来修复旋律和节奏。
 4. 任何显存或速度优化都必须保留模板 KV 的计算和复用语义；不能为了省显存重写模板 forward 或改变条件注入位置。
 

@@ -28,6 +28,6 @@ This directory is the Windows/CUDA DiffSynth-Music worker. Read `docs/DIFFSYNTH_
 
 ## Runtime and recovery
 
-- Verify `/health` after the first startup and after an automatic redeploy. It must show `execution=official_prosody_quick_start`, `control=prosody`, the current `build`, and the RTX 5060 Ti.
+- Verify `/health` after the first startup and after an automatic redeploy. It must show `execution=official_prosody_quick_start`, the default `control=prosody_control` (or the explicitly selected official A/B mode), the current `build`, and the RTX 5060 Ti.
 - Do not reintroduce CPU template paging, KV-cache compression, negative-cache aliasing, denoising anchors, or monkey-patched timing wrappers. If the official path fails, report the exact error and logs instead of silently falling back.
 - If the daemon is stopped, do not start the raw worker alongside a stale daemon. Stop the old daemon process first, then start the daemon again.
