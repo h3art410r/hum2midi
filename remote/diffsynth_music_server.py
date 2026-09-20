@@ -150,8 +150,11 @@ async def generate(
         waveform = torch.from_numpy(samples.T.copy())
         if sample_rate != 48000:
             waveform = torchaudio.functional.resample(waveform, sample_rate, 48000)
-        waveform = waveform.mean(dim=0, keepdim=True)
-        prosody = extract_prosody(waveform)
+        # Control was trained on stereo vocal inputs; Prosody extraction is
+        # intentionally mono. Keep both representations instead of feeding a
+        # mono tensor into the Control adapter.
+        control_audio = waveform
+        prosody = extract_prosody(waveform.mean(dim=0, keepdim=True))
         seconds = float(duration) if duration.strip() else prosody.shape[1] / 48000
         started = time.perf_counter()
         denoise = float(denoising_strength) if denoising_strength.strip() else None
@@ -168,16 +171,16 @@ async def generate(
             # Template model IDs follow the official DiffSynth-Music layout:
             # 0 = Control (vocal onset/rhythm), 1 = Prosody (pitch/timing).
             template_inputs=(
-                [{"model_id": 0, "audio": waveform}, {"model_id": 1, "audio": prosody}]
+                [{"model_id": 0, "audio": control_audio}, {"model_id": 1, "audio": prosody}]
                 if control_profile != "prosody"
                 else [{"model_id": 1, "audio": prosody}]
             ),
             negative_template_inputs=(
-                [{"model_id": 0, "audio": waveform}, {"model_id": 1, "audio": prosody}]
+                [{"model_id": 0, "audio": control_audio}, {"model_id": 1, "audio": prosody}]
                 if control_profile != "prosody"
                 else [{"model_id": 1, "audio": prosody}]
             ),
-            input_audio=waveform if denoise is not None else None,
+            input_audio=control_audio if denoise is not None else None,
             denoising_strength=denoise if denoise is not None else 1.0,
         )
         # Avoid torchaudio.save -> TorchCodec on newer torchaudio builds.
