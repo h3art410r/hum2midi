@@ -24,7 +24,7 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from diffsynth.core.data.operators import LoadMultiTrackAudio
-from diffsynth.diffusion.template import TemplatePipeline
+from diffsynth.diffusion.template import TemplatePipeline, load_template_model
 from diffsynth.pipelines.diffsynth_music import DiffSynthMusicPipeline, ModelConfig
 from diffsynth.utils.music_tools import extract_prosody
 
@@ -168,6 +168,18 @@ def _prepare_template_model(model: torch.nn.Module) -> torch.nn.Module:
         # returns it to CPU even if a forward raises.
         layers[index] = _TemplateLayerCPUWrapper(layer)
     model._h2m_template_cpu = True
+    return model
+
+
+def _move_template_root_to_cuda(model: torch.nn.Module) -> torch.nn.Module:
+    """Move non-transformer template components without reloading all layers."""
+    for name, child in model.named_children():
+        if name != "layers":
+            child.to(dtype=torch.bfloat16, device="cuda")
+    for parameter in model.parameters(recurse=False):
+        parameter.data = parameter.data.to(dtype=torch.bfloat16, device="cuda")
+    for buffer in model.buffers(recurse=False):
+        buffer.data = buffer.data.to(device="cuda")
     return model
 
 
@@ -467,7 +479,17 @@ def load_models() -> None:
         original_fetch_template_model = TEMPLATE.fetch_model
 
         def fetch_template_model(model_id):
-            return _prepare_template_model(original_fetch_template_model(model_id))
+            if not TEMPLATE_LAYER_CPU_OFFLOAD:
+                return original_fetch_template_model(model_id)
+            model_config = TEMPLATE.model_configs[model_id]
+            model_config.download_if_necessary()
+            model = load_template_model(
+                model_config.path,
+                torch_dtype=TEMPLATE.torch_dtype,
+                device="cpu",
+                state_dict=model_config.state_dict,
+            )
+            return _prepare_template_model(_move_template_root_to_cuda(model))
 
         TEMPLATE.fetch_model = fetch_template_model
     elif TEMPLATE.models is not None:
