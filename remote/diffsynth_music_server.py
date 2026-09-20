@@ -112,6 +112,22 @@ def _release_temporary_cuda_memory() -> None:
         torch.cuda.empty_cache()
 
 
+def _cuda_memory_fields() -> dict[str, str]:
+    if not torch.cuda.is_available():
+        return {}
+    free, total = torch.cuda.mem_get_info("cuda")
+    return {
+        "allocated_gb": f"{torch.cuda.memory_allocated() / 1024**3:.2f}",
+        "reserved_gb": f"{torch.cuda.memory_reserved() / 1024**3:.2f}",
+        "free_gb": f"{free / 1024**3:.2f}",
+        "total_gb": f"{total / 1024**3:.2f}",
+    }
+
+
+def _log_cuda_memory(event: str, request_id: str) -> None:
+    _worker_log(event, request_id, **_cuda_memory_fields())
+
+
 class _TemplateLayerCPUWrapper(torch.nn.Module):
     """Keep one template transformer block on RAM between forward calls."""
 
@@ -190,6 +206,11 @@ def _render_with_timings(
     )
 
     started = time.perf_counter()
+    # The pipeline may retain a prepared layer from the previous request.
+    # Force every base-model component out before loading an 8 GB template.
+    PIPE.load_models_to_device([])
+    _release_temporary_cuda_memory()
+    _log_cuda_memory("CUDA_BEFORE_TEMPLATE", request_id)
     template_cache = TEMPLATE.call_single_side(pipe=PIPE, inputs=template_inputs)
     timings["template_positive_seconds"] = time.perf_counter() - started
     _worker_log(
@@ -197,7 +218,9 @@ def _render_with_timings(
         elapsed=f"{timings['template_positive_seconds']:.3f}s",
         keys=sorted(template_cache),
     )
+    _log_cuda_memory("CUDA_AFTER_TEMPLATE_POSITIVE", request_id)
     _release_temporary_cuda_memory()
+    _log_cuda_memory("CUDA_AFTER_TEMPLATE_RELEASE", request_id)
     if cfg_scale == 1.0:
         # BasePipeline skips the negative forward at CFG=1. Avoid loading and
         # running the negative template branch as well.
@@ -215,6 +238,7 @@ def _render_with_timings(
             "TEMPLATE_NEGATIVE_REUSED", request_id,
             reason="identical_control_and_prosody_inputs",
         )
+        _log_cuda_memory("CUDA_AFTER_TEMPLATE_NEGATIVE_REUSE", request_id)
     else:
         started = time.perf_counter()
         negative_template_cache = TEMPLATE.call_single_side(pipe=PIPE, inputs=negative_template_inputs)
@@ -251,6 +275,7 @@ def _render_with_timings(
         kwargs=sorted(kwargs),
         input_audio="yes" if input_audio is not None else "no",
     )
+    _log_cuda_memory("CUDA_BEFORE_PIPE", request_id)
 
     original_unit_runner = PIPE.unit_runner
     original_vae_decode = PIPE.vae_output_to_audio
