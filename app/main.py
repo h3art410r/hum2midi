@@ -120,6 +120,10 @@ async def create_generation(request: Request) -> JSONResponse:
 
     filename = request.headers.get("x-audio-filename", "hum.m4a")
     requested_preset = request.headers.get("x-style-preset", "").strip()
+    control_profile = request.headers.get("x-diffsynth-control-profile", "control_prosody").strip()
+    cfg_scale = request.headers.get("x-diffsynth-cfg-scale", "4").strip()
+    steps = request.headers.get("x-diffsynth-steps", "50").strip()
+    seed = request.headers.get("x-diffsynth-seed", "101").strip()
     if requested_preset:
         _backend_log(
             f"legacy preset header ignored; generating all vertical plans requested={requested_preset}",
@@ -155,6 +159,10 @@ async def create_generation(request: Request) -> JSONResponse:
         "provider": _make_provider().status(),
         "plan": "all",
         "plan_name": "Funk 和 Lo-fi",
+        "control_profile": control_profile,
+        "cfg_scale": cfg_scale,
+        "steps": steps,
+        "seed": seed,
         "plans": [
             {"id": plan_id, "name": plan["name"], "description": plan["description"], "noise": plan["noise"]}
             for plan_id, plan in PROMPT_PLANS.items()
@@ -265,15 +273,21 @@ async def _run_generation(job_id: str, audio_path: Path, job_dir: Path) -> None:
             )
             output_path = job_dir / f"{variant_id}.wav"
             try:
-                diagnostics = await asyncio.to_thread(
-                    provider.render,
-                    audio_path,
-                    "transform",
-                    output_path,
-                    output_seconds=input_seconds,
-                    prompt=plan["prompt"],
-                    init_noise_level=plan["noise"],
-                )
+                render_kwargs = {
+                    "output_seconds": input_seconds,
+                    "prompt": plan["prompt"],
+                    "init_noise_level": plan["noise"],
+                }
+                if isinstance(provider, DiffSynthRemoteClient):
+                    profile = job.get("control_profile", "control_prosody")
+                    render_kwargs.update({
+                        "control_profile": profile,
+                        "denoising_strength": 0.25 if profile == "anchored_low" else 0.45 if profile == "anchored_medium" else None,
+                        "cfg_scale": float(job.get("cfg_scale", "4")),
+                        "steps": int(job.get("steps", "50")),
+                        "seed": int(job.get("seed", "101")),
+                    })
+                diagnostics = await asyncio.to_thread(provider.render, audio_path, "transform", output_path, **render_kwargs)
             except Exception as exc:
                 _backend_log(
                     f"generation failed plan={plan_id}: {_friendly_error(exc)}",

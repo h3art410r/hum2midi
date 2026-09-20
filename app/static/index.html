@@ -21,6 +21,9 @@
     .preset-panel h2 { margin:0 0 6px; font-size:15px; }
     .preset-panel > p { margin:0 0 10px; color:var(--muted); font-size:12px; }
     #prompt-presets { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
+    .control-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; text-align:left; }
+    .control-grid label { font-size:12px; color:#59605a; display:grid; gap:4px; }
+    .control-grid input,.control-grid select { min-width:0; padding:7px; border:1px solid #d8ddd2; border-radius:8px; background:#fff; }
     .preset-card { min-width:0; padding:10px; border:1px solid var(--line); border-radius:12px; background:#fffefa; color:var(--ink); text-align:left; }
     .preset-card strong { display:block; font-size:12px; }
     .preset-card small { display:block; margin-top:4px; color:var(--muted); font-size:10px; line-height:1.35; }
@@ -65,7 +68,7 @@
     }
     @media (hover:none) { body { display:block; background:var(--paper); } .stage { width:100%; min-height:100vh; height:auto; overflow:visible; aspect-ratio:auto; } main { padding:42px 0 56px; } footer { margin-top:auto; } }
     @media (max-width:520px) { body { background:var(--paper); } .stage { padding:24px 22px max(24px,env(safe-area-inset-bottom)); } header { align-items:flex-start; } .tag { max-width:130px; text-align:center; } main { padding:46px 0; } #record { width:136px;height:136px; } #results { grid-template-columns:1fr; } footer { margin-top:auto; } }
-    @media (max-width:760px) { #prompt-presets { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:760px) { #prompt-presets { grid-template-columns:repeat(2,minmax(0,1fr)); } .control-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     @media (max-width:760px) { .note-list { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   </style>
 </head>
@@ -88,6 +91,12 @@
         <div id="fallback-upload" class="fallback-upload"><label for="audio-file">手机网页录音不可用，请直接选择音频文件</label><input id="audio-file" type="file" accept=".m4a,.mp4,.wav,.mp3,audio/mp4,audio/x-m4a,audio/wav,audio/mpeg" onchange="window.useSelectedAudioFile && window.useSelectedAudioFile()"><button id="use-file" class="secondary" type="button" onclick="document.getElementById('status').textContent='正在读取所选音频…'; document.getElementById('frontend-log').textContent += 'INLINE CLICK 使用此文件\n'; if (window.useSelectedAudioFile) window.useSelectedAudioFile();">使用此文件</button></div>
       </div>
       <div id="status" role="status" aria-live="polite">准备好就按住按钮开始</div>
+      <section class="preset-panel runtime-controls"><h2>模型调试参数</h2><div class="control-grid">
+        <label>控制路径<select id="control-profile"><option value="control_prosody">Control + Prosody</option><option value="prosody">Prosody only</option><option value="anchored_low">低强度输入锚定</option><option value="anchored_medium">中强度输入锚定</option></select></label>
+        <label>CFG <input id="cfg-scale" type="number" min="1" max="8" step="0.5" value="4"></label>
+        <label>Steps <input id="steps" type="number" min="10" max="100" step="5" value="50"></label>
+        <label>Seed <input id="seed" type="number" value="101"></label>
+      </div></section>
       <pre id="frontend-log" class="frontend-log" aria-label="前端和后端调试日志">前端日志已启动，等待操作；后端日志轮询中…
 </pre>
       <audio id="preview" class="hidden" controls></audio>
@@ -119,6 +128,10 @@
     const frontendLog = document.querySelector('#frontend-log');
     const promptPresets = document.querySelector('#prompt-presets');
     const stage = document.querySelector('.stage');
+    const controlProfile = document.querySelector('#control-profile');
+    const cfgScale = document.querySelector('#cfg-scale');
+    const stepsInput = document.querySelector('#steps');
+    const seedInput = document.querySelector('#seed');
     let mediaRecorder, stream, chunks = [], blob, blobUrl, startedAt, tick, jobPoll;
     let backendLogCursor = 0;
     let loadedPresets = [];
@@ -340,7 +353,7 @@
       try {
         log('UPLOAD_START', 'sending audio body');
         const ext = blob.type.includes('webm') ? 'webm' : 'm4a';
-        const response = await debugFetch('/api/generations',{method:'POST',headers:{'Content-Type':blob.type,'X-Audio-Filename':`hum.${ext}`},body:blob});
+        const response = await debugFetch('/api/generations',{method:'POST',headers:{'Content-Type':blob.type,'X-Audio-Filename':`hum.${ext}`,'X-DiffSynth-Control-Profile':controlProfile.value,'X-DiffSynth-Cfg-Scale':cfgScale.value,'X-DiffSynth-Steps':stepsInput.value,'X-DiffSynth-Seed':seedInput.value},body:blob});
         const created = await response.json();
         if (!response.ok) throw new Error(created.detail || '请求失败');
         await poll(created.id);
