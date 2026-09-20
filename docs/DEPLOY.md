@@ -1,46 +1,62 @@
-# Demo 生产机部署记录
+# Native Demo 部署记录
 
-目标机：`ubuntu@kr.sunyongfei.cn`（Ubuntu 24.04，Python 3.12）。
+目标公网机：`ubuntu@kr.sunyongfei.cn`。它只负责 HTTPS、Nginx 和反向隧道，不下载模型，也不执行 DiffSynth 推理。
 
-## 当前服务
+## 当前拓扑
 
-- 应用目录：`/home/ubuntu/hum2midi`
-- systemd：`hum2midi.service`
-- Uvicorn：`127.0.0.1:8000`（由 Nginx 反代）
-- Nginx：`80 → 443`，HTTP 自动跳转 HTTPS
-- 访问地址：<https://kr.sunyongfei.cn>
-- 音频组件：系统 FFmpeg、FluidSynth 2.3.4、`fluid-soundfont-gm`
-- API 密钥只存在服务器 `.env`（权限 `600`），没有进入 Git 或日志
-
-## 可选：腾讯云人声转录 A/B
-
-腾讯智能音乐的人声转录任务要求服务端提交一个可访问的 HTTPS 音频 URL。启用前在服务器 `.env` 增加以下运行时配置（不要提交到仓库）：
-
-```bash
-TRANSCRIPTION_ENGINE=tencent
-TENCENT_SECRET_ID=...
-TENCENT_SECRET_KEY=...
-H2M_PUBLIC_BASE_URL=https://kr.sunyongfei.cn
+```text
+https://kr.sunyongfei.cn/hum2midi/
+        -> 公网 Nginx : 18000
+        <- SSH reverse tunnel <- 开发机 native.api : 8000
+        -> 局域网 HTTP -> RTX 5060 Ti Worker : 8765
 ```
 
-应用会把规范化后的临时 WAV 暴露在随机 job id 路由，任务完成后再由 provider 下载 MIDI。若只想保留当前基线，使用 `TRANSCRIPTION_ENGINE=dsp`；`auto` 会在检测到腾讯凭据时优先选择腾讯，否则使用 DSP。云端任务失败不会静默切换引擎。
+公网机的应用目录是 `/home/ubuntu/hum2midi`，Nginx 仍由 `hum2midi.service` 管理。开发机反向隧道命令是：
 
-## 验收
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start_hum2midi_tunnel.ps1
+```
+
+隧道断开时 `/hum2midi/` 会暂时返回 502；脚本会自动重连。公网机自身不需要 Stable Audio 或 GPU 模型。
+
+## 开发机后端
+
+新版本使用 `native.api`，模型配置通过环境变量指向局域网 Worker：
+
+```powershell
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r native\requirements.txt
+$env:NATIVE_WORKER_URL = "http://192.168.9.100:8765"
+powershell -ExecutionPolicy Bypass -File scripts\start_native_backend.ps1 -Port 8000
+```
+
+本地页面：`http://localhost:8000/`；桌面 16:9 调试视图：`http://localhost:8000/?debug=16x9`。
+
+## GPU Worker
+
+Worker 是 Windows RTX 5060 Ti 上的常驻进程。首次部署或守护进程脚本变更后，在 GPU 工作区执行一次：
+
+```powershell
+git pull --ff-only origin main
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_diffsynth_worker_daemon.ps1 -Port 8765 -PollSeconds 30
+```
+
+守护进程启动 `native.worker_server:app`，每 15 或 30 秒检查 `origin/main`。发现更新后，它会等待当前任务、拉取代码、重启模型子进程和做健康检查。只改 Worker 代码时不需要手动重启模型；只有守护进程脚本自身改变时需要手动重启一次守护进程。
+
+确认：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8765/health | ConvertTo-Json -Depth 5
+```
+
+必须看到 `provider=DiffSynth-Music`、`control=prosody`、RTX 5060 Ti 和 `execution=official_prosody_quick_start`。Worker 只接受官方 Prosody 条件，不静默切换其它模型。
+
+## 公网验收
 
 ```bash
-curl https://kr.sunyongfei.cn/api/health
+curl https://kr.sunyongfei.cn/hum2midi/api/health
 systemctl is-active hum2midi nginx
 ```
 
-健康检查应报告 `renderer: fluidsynth-soundfont`。真实哼唱复测 job：`fe96c26e463d472c857ddf76c69a8398`，canonical MIDI 14 音，Funk/Lofi 风格 MIDI 137/46 音符，两个音频接口均返回 200。
-
-## 更新流程
-
-在开发机完成测试后，只同步被 Git 跟踪的代码和文档，不同步 `.env`、`.venv`、`data/`：
-
-```bash
-sudo systemctl restart hum2midi
-sudo journalctl -u hum2midi -f
-```
-
-证书由 Certbot 自动续期；证书到期时间和续期任务可用 `sudo certbot certificates`、`systemctl list-timers | grep certbot` 检查。
+页面上传真实哼唱后，Funk 或 Lo-fi 任一完成就先展示，另一个继续生成。后端日志和任务清单位于开发机 `runtime/native_jobs/`；Worker 阶段日志位于 GPU 工作区 `remote/logs/`。
