@@ -9,6 +9,7 @@
 - 已复核 DiffSynth-Music 原论文：其核心是冻结 ACE-Step-1.5-XL-SFT DiT + Control/Prosody/Reference 模板，把音频条件变成逐层 KV memory 注入生成分支；Prosody 用 pYIN 音高轨迹和包络正弦重合成，保留音高与时间但削弱音色和发音。论文的 50 步 CFG4 实验来自带歌词歌曲，不能直接当作手机哼唱的质量保证。
 - 新版本先保持 Prosody-only 的干净基线；若旋律身份不足，下一项论文一致的实验是 Control + Prosody。Reference 只用于风格/音色，不用于修复节奏。
 - 当前明确不启用组合条件：Control、Reference 和联合条件在 16GB GPU 上暂不进入默认链路，必须先独立验证显存安全，避免把组合方案混入 Prosody 基线。
+- Quick Start 复核确认：正弦波 Prosody 重合成发生在工程侧 `extract_prosody` 预处理，不是模型内部动态完成；Worker 先做 pYIN + 包络重合成，再把条件波形交给 `TemplatePipeline(model_id=1)`。
 
 ## 2026-09-21：固定输入试听实验室
 

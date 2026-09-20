@@ -77,7 +77,83 @@ class MusicModel:
 
 接口返回模型名、版本、实际输入时长、输出时长、推理耗时、显存峰值和使用的参数。模型不可用时任务必须失败并显示真实原因，不能切换到 mock 或其他未声明模型。
 
-## 5. Prompt 初始版本
+## 5. 官方 Quick Start 与新版本的对应管线
+
+官方文档：<https://diffsynth-studio-doc.readthedocs.io/en/latest/Model_Details/DiffSynth-Music.html>。官方 Quick Start 的共同流程是：加载基础 `DiffSynthMusicPipeline`，加载三个 template 权重，准备某一种控制音频，调用 `TemplatePipeline`，最后以 48kHz 保存输出。
+
+官方 Prosody-only 管线的等价最小代码如下。代码保留官方调用语义，省略服务端队列和 HTTP 封装：
+
+```python
+import torch
+import torchaudio
+from diffsynth.core.data.operators import LoadMultiTrackAudio
+from diffsynth.diffusion.template import TemplatePipeline
+from diffsynth.pipelines.diffsynth_music import DiffSynthMusicPipeline, ModelConfig
+from diffsynth.utils.music_tools import extract_prosody
+
+model_id = "DiffSynth-Studio/DiffSynth-Music"
+
+pipe = DiffSynthMusicPipeline.from_pretrained(
+    torch_dtype=torch.bfloat16,
+    device="cuda",
+    model_configs=[
+        ModelConfig(model_id=model_id, origin_file_pattern="transformer/model.safetensors"),
+        ModelConfig(model_id=model_id, origin_file_pattern="conditioner/model.safetensors"),
+        ModelConfig(model_id=model_id, origin_file_pattern="text_encoder/model.safetensors"),
+        ModelConfig(model_id=model_id, origin_file_pattern="vae/model.safetensors"),
+        ModelConfig(model_id=model_id, origin_file_pattern="track_separator/model.safetensors", computation_dtype=torch.float32),
+    ],
+    tokenizer_config=ModelConfig(model_id=model_id, origin_file_pattern="text_encoder/"),
+)
+
+template = TemplatePipeline.from_pretrained(
+    torch_dtype=torch.bfloat16,
+    device="cuda",
+    model_configs=[
+        ModelConfig(model_id=model_id, origin_file_pattern="template_control/"),
+        ModelConfig(model_id=model_id, origin_file_pattern="template_prosody/"),
+        ModelConfig(model_id=model_id, origin_file_pattern="template_reference/"),
+    ],
+)
+
+audio = LoadMultiTrackAudio(division_factor=3840)("input.wav")
+prosody = extract_prosody(audio)
+result = template(
+    pipe,
+    prompt="An energetic instrumental funk track with a strong bass groove.",
+    negative_prompt=pipe.default_negative_prompt,
+    lyrics="",
+    duration=prosody.shape[1] / 48000,
+    seed=42,
+    tiled=True,
+    cfg_scale=4,
+    num_inference_steps=50,
+    template_inputs=[{"model_id": 1, "audio": prosody}],
+    negative_template_inputs=[{"model_id": 1, "audio": prosody}],
+)
+torchaudio.save("output.wav", result, 48000)
+```
+
+### 5.1 哼唱输入的适配
+
+官方 Prosody 示例对完整歌曲先调用 `pipe.extract_track(..., track="vocals")`，再提取 Prosody。我们的输入本身就是人声哼唱，因此新版本不做 Demucs vocal 分离，也不调用 `extract_track`：
+
+```python
+audio = LoadMultiTrackAudio(division_factor=3840)("hum.wav")
+prosody = extract_prosody(audio)
+```
+
+其余 `TemplatePipeline` 参数和 `model_id=1` 保持不变。输入先变成官方要求的 48kHz 音频，并按 `division_factor=3840` 对齐；如果输入是单声道，官方加载器会复制成两个声道。新版本对手机录音的双声道情况先选择有效声道，再复制成两个相同声道，避免把一条有效声道和静音声道平均。
+
+这里的“把人声重合成为正弦波”是工程侧的 `extract_prosody` 预处理，不是生成模型内部隐式完成的步骤。工程侧先用 pYIN 估计基频、从音频包络得到幅度轨迹，再用正弦载波重建一条只表达音高和时间的条件波形；模型收到的是这条已经重合成的条件波形。这样可以在进入模型前主动去掉大部分歌词、发音和原始音色线索。
+
+### 5.2 Quick Start 中没有使用的路径
+
+- 不使用 `input_audio` 和 `denoising_strength`；它们属于基础 pipeline 的 audio-to-audio 重绘参数，不是官方 Prosody template 的控制路径。
+- 不使用 `target_audio` / `target_track`；这会把输入轨融合回输出，与“完整风格化、不保留原始哼唱轨”的目标不同。
+- 不使用 Control、Reference 或联合条件；它们保留在后续独立显存实验中。
+
+## 6. Prompt 初始版本
 
 模型收到的 prompt 先保持短而明确，避免用文字重述旋律，让音频条件承担旋律和节奏约束：
 
@@ -89,7 +165,7 @@ and a memorable arrangement.
 
 后续只允许一次修改一个变量：prompt、seed、CFG、步数、音频条件强度或输入预处理。每个实验都要保存输入和输出，不能凭印象混合比较。
 
-## 6. 论文原文复核
+## 7. 论文原文复核
 
 原文：<https://arxiv.org/abs/2609.12774>；官方实现说明：<https://diffsynth-studio-doc.readthedocs.io/en/latest/Model_Details/DiffSynth-Music.html>。
 
@@ -126,7 +202,7 @@ and a memorable arrangement.
 3. Reference 只用于风格/音色实验，不能用来修复旋律和节奏。
 4. 任何显存或速度优化都必须保留模板 KV 的计算和复用语义；不能为了省显存重写模板 forward 或改变条件注入位置。
 
-## 7. 后端结构
+## 8. 后端结构
 
 ### 6.1 API 服务
 
@@ -167,7 +243,7 @@ diagnostics.json
 
 `request.json` 必须记录模型版本、prompt、seed、CFG、步数、输入采样率、输入声道、实际生成时长和 Git 构建版本。
 
-## 8. 质量验收
+## 9. 质量验收
 
 每次实验用同一段真实哼唱，至少评价两件事：
 
@@ -184,7 +260,7 @@ diagnostics.json
 - 用户能在完整音频中辨认出原始旋律和节奏；
 - 模型不可用时前端显示明确失败，而不是返回旧缓存冒充新结果。
 
-## 9. 实验方法
+## 10. 实验方法
 
 建立一个固定输入试听页，使用同一真实录音重复生成。每轮只改变一个变量，并记录：
 
@@ -197,7 +273,7 @@ diagnostics.json
 
 如果某次效果明显变好，即使更慢，也先冻结为质量基线，再单独做性能 A/B。性能版本不得直接覆盖质量基线。
 
-## 10. 第一阶段实施顺序
+## 11. 第一阶段实施顺序
 
 1. 创建干净的模型适配模块和 Worker API。
 2. 按官方示例实现最小单任务推理。
@@ -206,7 +282,7 @@ diagnostics.json
 5. 固定质量基线，再开始性能和显存实验。
 6. 只有当第一候选模型无法达到旋律身份门槛时，才引入第二个模型做对照。
 
-## 11. 明确不做的事情
+## 12. 明确不做的事情
 
 - 不把旧版代码逐段搬进新后端。
 - 不在主链路加入 MIDI、YIN、歌曲识别或外部曲谱检索。
