@@ -146,3 +146,4 @@
 - 开发机已启动 `native.api` 监听 8000，并恢复 `scripts/start_hum2midi_tunnel.ps1` 的反向隧道；公网 `/hum2midi/` 和 `/api/health` 已返回 200。公网 502 的直接原因是隧道进程未运行，不是前后端路由故障。迁移后健康接口已确认 `execution=official_prosody_quick_start`，说明旧 daemon 通过兼容入口自动完成了切换。
 - 手机上传补充了文件名编码：前端用 `encodeURIComponent` 发送 `X-Audio-Filename`，后端解码后再取扩展名，避免中文文件名让浏览器在发请求前抛出无响应错误。
 - Native 后端规范化现在明确选择双声道中能量更高的一侧，再复制为两个相同声道；不再让 `ffmpeg -ac 2` 把有效哼唱与弱/噪声声道平均，符合官方 Prosody 输入适配和用户要求。
+- 新 Worker 首轮真实冒烟发现当前 DiffSynth 版本的 `LoadMultiTrackAudio` 会通过 `torchaudio` 要求可选 TorchCodec。已加入仅针对该缺失依赖的 soundfile fallback：保持 `[channels, samples]`、48kHz 和 3840 对齐后继续走官方 `extract_prosody` 与 `TemplatePipeline`，不改模型内部。真实输入单步测试成功：Prosody 0.357 秒、推理 33.305 秒、总计 33.674 秒、峰值 reserved 8.969 GiB，输出 10.480 秒 WAV。
