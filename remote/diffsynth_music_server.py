@@ -90,12 +90,18 @@ async def generate(
     duration: str = Form(""),
     seed: int = Form(101),
     control: str = Form("prosody"),
+    control_profile: str = Form("control_prosody"),
+    denoising_strength: str = Form(""),
+    cfg_scale: str = Form(""),
+    steps: str = Form(""),
     authorization: str | None = Header(default=None),
 ) -> FileResponse:
     if TOKEN and authorization != f"Bearer {TOKEN}":
         raise HTTPException(401, "Invalid worker token")
     if control != "prosody":
-        raise HTTPException(400, "This worker only exposes the Prosody control path")
+        raise HTTPException(400, "This worker currently uses the prosody endpoint")
+    if control_profile not in {"prosody", "control_prosody", "anchored_low", "anchored_medium"}:
+        raise HTTPException(400, "Unknown control_profile")
     load_models()
     suffix = Path(audio.filename or "input.wav").suffix or ".wav"
     input_path = Path(tempfile.mkstemp(prefix="input-", suffix=suffix, dir=WORK_DIR)[1])
@@ -116,6 +122,14 @@ async def generate(
         prosody = extract_prosody(waveform)
         seconds = float(duration) if duration.strip() else prosody.shape[1] / 48000
         started = time.perf_counter()
+        template_inputs = []
+        negative_template_inputs = []
+        if control_profile != "prosody":
+            template_inputs.append({"model_id": 0, "audio": waveform})
+            negative_template_inputs.append({"model_id": 0, "audio": waveform})
+        template_inputs.append({"model_id": 1, "audio": prosody})
+        negative_template_inputs.append({"model_id": 1, "audio": prosody})
+        denoise = float(denoising_strength) if denoising_strength.strip() else None
         result = TEMPLATE(
             PIPE,
             prompt=prompt,
@@ -124,16 +138,12 @@ async def generate(
             duration=seconds,
             seed=seed,
             tiled=True,
-            cfg_scale=float(os.getenv("DIFFSYNTH_CFG_SCALE", "4")),
-            num_inference_steps=int(os.getenv("DIFFSYNTH_STEPS", "50")),
-            template_inputs=[
-                {"model_id": 0, "audio": waveform},
-                {"model_id": 1, "audio": prosody},
-            ],
-            negative_template_inputs=[
-                {"model_id": 0, "audio": waveform},
-                {"model_id": 1, "audio": prosody},
-            ],
+            cfg_scale=float(cfg_scale) if cfg_scale.strip() else float(os.getenv("DIFFSYNTH_CFG_SCALE", "4")),
+            num_inference_steps=int(steps) if steps.strip() else int(os.getenv("DIFFSYNTH_STEPS", "50")),
+            template_inputs=template_inputs,
+            negative_template_inputs=negative_template_inputs,
+            input_audio=waveform if denoise is not None else None,
+            denoising_strength=denoise,
         )
         # Avoid torchaudio.save -> TorchCodec on newer torchaudio builds.
         sf.write(str(output_path), result.detach().float().cpu().numpy().T, 48000, subtype="PCM_16")

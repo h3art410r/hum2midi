@@ -67,6 +67,10 @@ class DiffSynthRemoteClient:
         prompt: str | None = None,
         init_noise_level: float | None = None,
         seed: int | None = None,
+        control_profile: str = "control_prosody",
+        denoising_strength: float | None = None,
+        cfg_scale: float | None = None,
+        steps: int | None = None,
     ) -> dict[str, object]:
         del style, init_noise_level
         if not source.is_file():
@@ -76,6 +80,11 @@ class DiffSynthRemoteClient:
             "duration": str(output_seconds or ""),
             "seed": str(seed if seed is not None else 101),
             "control": "prosody",
+            "control_profile": control_profile,
+            "use_input_audio": str(denoising_strength is not None).lower(),
+            "denoising_strength": "" if denoising_strength is None else str(denoising_strength),
+            "cfg_scale": "" if cfg_scale is None else str(cfg_scale),
+            "steps": "" if steps is None else str(steps),
         }
         body, content_type = _multipart(fields, "audio", source.name, source.read_bytes(), "audio/wav")
         try:
