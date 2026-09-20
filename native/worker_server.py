@@ -10,6 +10,7 @@ import uuid
 from collections import deque
 from pathlib import Path
 
+import numpy as np
 import soundfile as sf
 import torch
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
@@ -59,6 +60,28 @@ def _log(event: str, request_id: str | None = None, **fields: object) -> None:
 def _vram_limit_gb() -> float:
     _free, total = torch.cuda.mem_get_info("cuda")
     return total / (1024**3) - 0.5
+
+
+def _load_wav_without_torchcodec(path: Path, division_factor: int) -> torch.Tensor:
+    """Read the backend's normalized PCM WAV when TorchCodec is unavailable.
+
+    DiffSynth's official ``LoadMultiTrackAudio`` currently delegates to
+    ``torchaudio.load`` and therefore requires the optional TorchCodec
+    package. The model receives the same [channels, samples] tensor either
+    way; this fallback only removes that optional decoder dependency.
+    """
+    data, sample_rate = sf.read(str(path), dtype="float32", always_2d=True)
+    if sample_rate != 48000:
+        raise RuntimeError(f"Native Worker expects 48000 Hz WAV, got {sample_rate}")
+    waveform = torch.from_numpy(np.asarray(data.T, dtype=np.float32).copy())
+    if waveform.shape[0] == 1:
+        waveform = waveform.repeat(2, 1)
+    elif waveform.shape[0] > 2:
+        waveform = waveform[:2]
+    length = (waveform.shape[1] // division_factor) * division_factor
+    if length <= 0:
+        raise RuntimeError("Input audio is shorter than the official division factor")
+    return waveform[:, :length]
 
 
 def _model_configs() -> list[ModelConfig]:
@@ -210,7 +233,13 @@ def generate(
         _log("INPUT_SAVED", request_id, bytes=len(payload), filename=audio.filename or "input.wav")
         conditioning_started = time.perf_counter()
         loader = LoadMultiTrackAudio(division_factor=3840)
-        waveform = loader(str(input_path))
+        try:
+            waveform = loader(str(input_path))
+        except (ImportError, RuntimeError) as exc:
+            if "torchcodec" not in str(exc).lower():
+                raise
+            _log("TORCHCODEC_UNAVAILABLE", request_id, fallback="soundfile", error=str(exc))
+            waveform = _load_wav_without_torchcodec(input_path, division_factor=3840)
         if waveform is None:
             raise RuntimeError("Official LoadMultiTrackAudio returned no waveform")
         prosody = extract_prosody(waveform)
