@@ -34,6 +34,7 @@ PORT = int(os.getenv("DIFFSYNTH_SERVER_PORT", "8765"))
 TOKEN = os.getenv("DIFFSYNTH_REMOTE_TOKEN", "")
 WORK_DIR = Path(os.getenv("DIFFSYNTH_WORK_DIR", "runtime/diffsynth_jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
+OFFLOAD_MODE = os.getenv("DIFFSYNTH_OFFLOAD_MODE", "cpu").strip().lower()
 
 app = FastAPI(title="DiffSynth-Music Prosody Worker")
 PIPE = None
@@ -140,6 +141,7 @@ def _render_with_timings(
 
     original_unit_runner = PIPE.unit_runner
     original_vae_decode = PIPE.vae_output_to_audio
+    original_load_models = PIPE.load_models_to_device
 
     def timed_unit_runner(unit, *args, **unit_kwargs):
         unit_started = time.perf_counter()
@@ -156,6 +158,19 @@ def _render_with_timings(
         elapsed = time.perf_counter() - decode_started
         timings["vae_decode_seconds"] = elapsed
         _worker_log("VAE_DECODE_DONE", request_id, elapsed=f"{elapsed:.3f}s", shape=tuple(result.shape))
+        return result
+
+    def timed_load_models(model_names):
+        load_started = time.perf_counter()
+        result = original_load_models(model_names)
+        elapsed = time.perf_counter() - load_started
+        _worker_log(
+            "MODEL_DEVICE_SWITCH_DONE",
+            request_id,
+            models=list(model_names),
+            elapsed=f"{elapsed:.3f}s",
+            offload_mode=OFFLOAD_MODE,
+        )
         return result
 
     def timed_progress(iterable):
@@ -183,6 +198,7 @@ def _render_with_timings(
     kwargs["progress_bar_cmd"] = timed_progress
     PIPE.unit_runner = timed_unit_runner
     PIPE.vae_output_to_audio = timed_vae_decode
+    PIPE.load_models_to_device = timed_load_models
     try:
         model_started = time.perf_counter()
         result = PIPE(**kwargs)
@@ -190,6 +206,7 @@ def _render_with_timings(
     finally:
         PIPE.unit_runner = original_unit_runner
         PIPE.vae_output_to_audio = original_vae_decode
+        PIPE.load_models_to_device = original_load_models
     _worker_log(
         "PIPE_DONE", request_id,
         elapsed=f"{timings['pipe_total_seconds']:.3f}s",
@@ -229,6 +246,37 @@ def _configs():
         "computation_dtype": torch.float32,
         "computation_device": "cuda",
     }
+    if OFFLOAD_MODE == "none":
+        return [
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="transformer/model.safetensors"),
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="conditioner/model.safetensors"),
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="text_encoder/model.safetensors"),
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="vae/model.safetensors"),
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="track_separator/model.safetensors", computation_dtype=torch.float32),
+        ]
+    if OFFLOAD_MODE == "dit_cuda":
+        # Experimental A/B mode: keep the DiT weights on CUDA while leaving
+        # the text/conditioner/VAE modules on CPU between their phases. This
+        # can OOM on a 16 GB card; it is never selected implicitly.
+        vram_config_dit_cuda = {
+            "offload_dtype": torch.bfloat16,
+            "offload_device": "cpu",
+            "onload_dtype": torch.bfloat16,
+            "onload_device": "cuda",
+            "preparing_dtype": torch.bfloat16,
+            "preparing_device": "cuda",
+            "computation_dtype": torch.bfloat16,
+            "computation_device": "cuda",
+        }
+        return [
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="transformer/model.safetensors", **vram_config_dit_cuda),
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="conditioner/model.safetensors", **vram_config_cpu),
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="text_encoder/model.safetensors", **vram_config_cpu),
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="vae/model.safetensors", **vram_config_cpu),
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="track_separator/model.safetensors", **vram_config_fp32),
+        ]
+    if OFFLOAD_MODE != "cpu":
+        raise RuntimeError(f"Unknown DIFFSYNTH_OFFLOAD_MODE={OFFLOAD_MODE!r}; use cpu, dit_cuda, or none")
     return [
         # Disk offload keeps VRAM low, but DiffSynth's Windows execution path
         # deep-copies disk-backed modules during inference. The safetensors
@@ -252,7 +300,15 @@ def load_models() -> None:
     PIPE = DiffSynthMusicPipeline.from_pretrained(
         torch_dtype=dtype, device="cuda", model_configs=_configs(),
         tokenizer_config=ModelConfig(model_id=MODEL_ID, origin_file_pattern="text_encoder/"),
-        vram_limit=torch.cuda.mem_get_info("cuda")[1] / (1024 ** 3) - 0.5,
+        vram_limit=(
+            None
+            if OFFLOAD_MODE == "none"
+            else (
+                float(os.getenv("DIFFSYNTH_VRAM_LIMIT_GB"))
+                if os.getenv("DIFFSYNTH_VRAM_LIMIT_GB")
+                else (torch.cuda.mem_get_info("cuda")[1] / (1024 ** 3) - 0.5)
+            )
+        ),
     )
     TEMPLATE = TemplatePipeline.from_pretrained(
         torch_dtype=dtype, device="cuda",
@@ -267,6 +323,7 @@ def load_models() -> None:
         dtype=dtype,
         vram_total_gb=f"{torch.cuda.mem_get_info('cuda')[1] / (1024 ** 3):.2f}",
         templates="control,prosody",
+        offload_mode=OFFLOAD_MODE,
     )
 
 
@@ -284,6 +341,7 @@ def health() -> dict[str, object]:
         "provider": "DiffSynth-Music",
         "control": "control+prosody",
         "templates": ["control", "prosody"],
+        "offload_mode": OFFLOAD_MODE,
         "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none",
         "model_id": MODEL_ID,
     }
@@ -301,7 +359,7 @@ def debug_logs(since: int = 0, limit: int = 200, request_id: str = "") -> dict[s
 
 
 @app.post("/v1/generate")
-async def generate(
+def generate(
     audio: UploadFile = File(...),
     prompt: str = Form(...),
     duration: str = Form(""),
@@ -313,6 +371,9 @@ async def generate(
     steps: str = Form(""),
     authorization: str | None = Header(default=None),
 ) -> FileResponse:
+    # This endpoint is intentionally synchronous. FastAPI runs it in its
+    # worker threadpool, keeping /health and /debug/logs responsive while the
+    # CUDA/Torch inference is running.
     request_id = uuid.uuid4().hex[:10]
     request_started = time.perf_counter()
     _worker_log(
@@ -339,7 +400,7 @@ async def generate(
     output_path = input_path.with_name(input_path.stem + "-output.wav")
     try:
         read_started = time.perf_counter()
-        payload = await audio.read()
+        payload = audio.file.read()
         input_path.write_bytes(payload)
         _worker_log(
             "INPUT_SAVED",
