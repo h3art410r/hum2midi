@@ -6,7 +6,7 @@
 
 当前生产实验目标是 `cpu` 安全路径。它不是把整套模型放到 CPU 上运行，而是让主模型按层动态换入、模板 block 在 CPU 与 CUDA 之间分页；仓库文件 `remote/worker_mode.txt` 是当前目标，启动脚本不带参数时会自动读取它。该路径已经在真实 10.943 秒录音、Control + Prosody、CFG4、steps10 上验证峰值约 7.84GiB。
 
-`dit_cuda` 仅用于明确的速度对照实验；它在 16GB 卡上可能 OOM，不得作为常驻默认。`none` 会完全关闭 VRAM 管理，只能在明确要求时使用。
+`dit_cuda` 已在修复后的代码上用同一段 10.943 秒录音、Control + Prosody、CFG4、steps10 验证：峰值约 8.90GiB、端到端约 41 秒，适合做速度 A/B，但仍保留为实验模式。`none` 会完全关闭 VRAM 管理；同一配置实测峰值约 19.29GiB，会触发 WDDM 超额迁移，禁止作为 16GB 常驻模式。
 
 ## 常驻启动和自动更新
 
@@ -58,3 +58,4 @@ Invoke-RestMethod "http://127.0.0.1:8765/debug/logs?since=0&limit=500" | Convert
 ```
 
 日志包含模板正负分支、模板 cache 合并、`CUDA_BEFORE_TEMPLATE`/`CUDA_AFTER_TEMPLATE_*`、Pipeline Unit、模型设备切换、每个 DiT 正负 CFG forward、每个 denoise step、VAE 解码、保存和显存峰值。不要把音频内容、密钥或完整 prompt 写入 Worker 日志。
+
