@@ -8,6 +8,7 @@ with scripts/start_diffsynth_music_server.ps1.
 from __future__ import annotations
 
 import os
+import gc
 import inspect
 import tempfile
 import time
@@ -36,6 +37,9 @@ WORK_DIR = Path(os.getenv("DIFFSYNTH_WORK_DIR", "runtime/diffsynth_jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 OFFLOAD_MODE = os.getenv("DIFFSYNTH_OFFLOAD_MODE", "cpu").strip().lower()
 WORKER_BUILD = os.getenv("H2M_WORKER_BUILD", "unknown")
+TEMPLATE_LAZY_LOADING = os.getenv("DIFFSYNTH_TEMPLATE_LAZY_LOADING", "1").strip().lower() not in {
+    "0", "false", "no", "off"
+}
 
 app = FastAPI(title="DiffSynth-Music Prosody Worker")
 PIPE = None
@@ -61,6 +65,33 @@ def _worker_log(event: str, request_id: str | None = None, **fields: object) -> 
         "request_id": request_id,
         "fields": {key: str(value) for key, value in fields.items()},
     })
+
+
+def _vram_limit_gb() -> float | None:
+    """Return a safe dynamic VRAM budget for the model pool.
+
+    ``None`` disables DiffSynth's dynamic VRAM manager. That was useful for
+    the initial DiT-resident experiment, but it lets the allocator exceed a
+    16GB card while relying on driver-level migration. Keep an explicit env
+    override for experiments and otherwise leave headroom for activations.
+    """
+    configured = os.getenv("DIFFSYNTH_VRAM_LIMIT_GB", "").strip()
+    if configured:
+        return float(configured)
+    if OFFLOAD_MODE == "none":
+        return None
+    if not torch.cuda.is_available():
+        return None
+    _free_bytes, total_bytes = torch.cuda.mem_get_info("cuda")
+    headroom = float(os.getenv("DIFFSYNTH_VRAM_HEADROOM_GB", "0.75"))
+    return max(1.0, total_bytes / (1024 ** 3) - headroom)
+
+
+def _release_temporary_cuda_memory() -> None:
+    """Release lazily loaded template objects between conditioning phases."""
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def _render_with_timings(
@@ -105,14 +136,23 @@ def _render_with_timings(
         elapsed=f"{timings['template_positive_seconds']:.3f}s",
         keys=sorted(template_cache),
     )
-    started = time.perf_counter()
-    negative_template_cache = TEMPLATE.call_single_side(pipe=PIPE, inputs=negative_template_inputs)
-    timings["template_negative_seconds"] = time.perf_counter() - started
-    _worker_log(
-        "TEMPLATE_NEGATIVE_DONE", request_id,
-        elapsed=f"{timings['template_negative_seconds']:.3f}s",
-        keys=sorted(negative_template_cache),
-    )
+    _release_temporary_cuda_memory()
+    if cfg_scale == 1.0:
+        # BasePipeline skips the negative forward at CFG=1. Avoid loading and
+        # running the negative template branch as well.
+        negative_template_cache = {}
+        timings["template_negative_seconds"] = 0.0
+        _worker_log("TEMPLATE_NEGATIVE_SKIPPED", request_id, reason="cfg_scale=1")
+    else:
+        started = time.perf_counter()
+        negative_template_cache = TEMPLATE.call_single_side(pipe=PIPE, inputs=negative_template_inputs)
+        timings["template_negative_seconds"] = time.perf_counter() - started
+        _worker_log(
+            "TEMPLATE_NEGATIVE_DONE", request_id,
+            elapsed=f"{timings['template_negative_seconds']:.3f}s",
+            keys=sorted(negative_template_cache),
+        )
+        _release_temporary_cuda_memory()
 
     kwargs: dict[str, object] = {
         "prompt": prompt,
@@ -316,15 +356,7 @@ def load_models() -> None:
     PIPE = DiffSynthMusicPipeline.from_pretrained(
         torch_dtype=dtype, device="cuda", model_configs=_configs(),
         tokenizer_config=ModelConfig(model_id=MODEL_ID, origin_file_pattern="text_encoder/"),
-        vram_limit=(
-            float(os.getenv("DIFFSYNTH_VRAM_LIMIT_GB"))
-            if os.getenv("DIFFSYNTH_VRAM_LIMIT_GB")
-            else (
-                None
-                if OFFLOAD_MODE in {"none", "dit_cuda"}
-                else torch.cuda.mem_get_info("cuda")[1] / (1024 ** 3) - 0.5
-            )
-        ),
+        vram_limit=_vram_limit_gb(),
     )
     TEMPLATE = TemplatePipeline.from_pretrained(
         torch_dtype=dtype, device="cuda",
@@ -332,13 +364,16 @@ def load_models() -> None:
             ModelConfig(model_id=MODEL_ID, origin_file_pattern="template_control/"),
             ModelConfig(model_id=MODEL_ID, origin_file_pattern="template_prosody/"),
         ],
+        lazy_loading=TEMPLATE_LAZY_LOADING,
     )
     _worker_log(
         "MODEL_LOAD_DONE",
         elapsed=f"{time.perf_counter() - started:.3f}s",
         dtype=dtype,
         vram_total_gb=f"{torch.cuda.mem_get_info('cuda')[1] / (1024 ** 3):.2f}",
+        vram_limit_gb=_vram_limit_gb() if _vram_limit_gb() is not None else "none",
         templates="control,prosody",
+        template_lazy_loading=TEMPLATE_LAZY_LOADING,
         offload_mode=OFFLOAD_MODE,
     )
 
@@ -358,6 +393,8 @@ def health() -> dict[str, object]:
         "control": "control+prosody",
         "templates": ["control", "prosody"],
         "offload_mode": OFFLOAD_MODE,
+        "vram_limit_gb": _vram_limit_gb() if torch.cuda.is_available() else None,
+        "template_lazy_loading": TEMPLATE_LAZY_LOADING,
         "build": WORKER_BUILD,
         "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none",
         "model_id": MODEL_ID,
