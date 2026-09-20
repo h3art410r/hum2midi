@@ -41,6 +41,8 @@
     #preview { width:min(420px,100%); margin:0 auto 15px; }
     audio { width:100%; height:40px; }
     .actions { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; }
+    .actions a { display:inline-block; text-decoration:none; }
+    .actions a.secondary { border:1px solid var(--line); border-radius:999px; padding:12px 18px; background:transparent; color:var(--ink); font-size:14px; }
     .fallback-upload { display:none; margin-top:10px; }
     .fallback-upload label { display:block; margin-bottom:8px; color:var(--muted); font-size:13px; }
     .fallback-upload input { display:block; width:100%; max-width:300px; margin:0 auto; font:inherit; font-size:13px; }
@@ -94,7 +96,7 @@
       <pre id="frontend-log" class="frontend-log" aria-label="前端和后端调试日志">前端日志已启动，等待操作；后端日志轮询中…
 </pre>
       <audio id="preview" class="hidden" controls></audio>
-      <div class="actions"><button id="redo" class="secondary hidden" type="button">重录</button><button id="make" class="secondary primary hidden" type="button">生成我的版本</button></div>
+      <div class="actions"><button id="redo" class="secondary hidden" type="button">重录</button><button id="make" class="secondary primary hidden" type="button">生成我的版本</button><a class="secondary" href="./listen">打开试听实验室</a></div>
       <p class="hint">提交后，录音会交给当前配置的音乐模型做完整风格化生成。</p>
       <div id="results" class="hidden"></div>
     </main>

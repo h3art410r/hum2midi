@@ -74,6 +74,95 @@ async def home() -> FileResponse:
     )
 
 
+@app.get("/listen", response_class=HTMLResponse)
+async def listen_page() -> FileResponse:
+    """Open the repeatable listening lab without requiring a new recording."""
+    return FileResponse(
+        STATIC / "listen.html",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
+
+
+def _latest_real_audio() -> Path | None:
+    """Find the newest real recording already present in the demo data."""
+    candidates = [
+        path
+        for path in DATA.rglob("*")
+        if path.is_file() and path.name in {"source.m4a", "source.wav", "audio_48k_stereo.wav", "audio_44k_stereo.wav"}
+    ]
+    return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
+
+
+def _latest_cached_listen_output() -> Path | None:
+    """Return an existing generated WAV so opening the lab is instant."""
+    candidates = [
+        path
+        for path in DATA.rglob("1.wav")
+        if path.is_file()
+    ]
+    return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
+
+
+@app.get("/api/listen/sample")
+async def listen_sample() -> dict[str, Any]:
+    source = _latest_real_audio()
+    cached = _latest_cached_listen_output()
+    return {
+        "source_available": bool(source),
+        "source_name": source.name if source else None,
+        "source_updated": source.stat().st_mtime if source else None,
+        "cached_available": bool(cached),
+        "cached_url": "/api/listen/cached" if cached else None,
+        "message": "使用最近一次真实录音作为固定试听输入。",
+    }
+
+
+@app.get("/api/listen/cached")
+async def listen_cached_audio() -> FileResponse:
+    cached = _latest_cached_listen_output()
+    if not cached or not cached.is_relative_to(DATA):
+        raise HTTPException(404, "No cached listening result")
+    return FileResponse(cached, media_type="audio/wav", filename="listen-cached.wav")
+
+
+@app.post("/api/listen/generate", status_code=202)
+async def generate_listen_sample() -> JSONResponse:
+    """Queue a generation from the latest real recording already on disk."""
+    source = _latest_real_audio()
+    if not source:
+        raise HTTPException(404, "No previous real recording is available")
+    job_id = uuid.uuid4().hex
+    job_dir = DATA / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    control_profile = "prosody"
+    cfg_scale = "4"
+    steps = "50"
+    seed = "42"
+    JOBS[job_id] = {
+        "id": job_id,
+        "status": "queued",
+        "message": "正在使用最近一次录音生成试听版本…",
+        "provider": _make_provider().status(),
+        "plan": "funk",
+        "plan_name": "Funk",
+        "control_profile": control_profile,
+        "cfg_scale": cfg_scale,
+        "steps": steps,
+        "seed": seed,
+        "plans": [{"id": plan_id, "name": plan["name"], "description": plan["description"], "noise": plan["noise"]} for plan_id, plan in PROMPT_PLANS.items()],
+        "prompts": {plan_id: plan["prompt"] for plan_id, plan in PROMPT_PLANS.items()},
+        "prompt_translations": {plan_id: plan["translation"] for plan_id, plan in PROMPT_PLANS.items()},
+        "noise_levels": {plan_id: plan["noise"] for plan_id, plan in PROMPT_PLANS.items()},
+        "variants": {},
+        "error": None,
+        "source_path": str(source),
+        "listen_sample": True,
+    }
+    _backend_log(f"listening lab queued source={source.name} seed={seed} steps={steps}", job_id=job_id)
+    asyncio.create_task(_run_generation(job_id, source, job_dir))
+    return JSONResponse({"id": job_id, "status": "queued"}, status_code=202)
+
+
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
     provider = _make_provider()

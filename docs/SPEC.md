@@ -10,6 +10,7 @@
 2. 用户提交录音，后端把输入统一成 48kHz、双声道 WAV，并保留这份归一化输入供试听；Worker 会选择有效声道、复制成两个相同声道，并按官方 3840 样本块对齐。
 3. 音频 provider 由 `H2M_AUDIO_PROVIDER` 显式选择。当前验收使用 `diffsynth_remote`，由 5060Ti Windows CUDA worker 按 DiffSynth-Music 官方模型卡的 `TemplatePipeline`，直接使用 Prosody 条件生成完整音乐。两者都不叠加原始人声轨或额外伴奏轨。
 4. 页面轮询任务状态，展示一个生成的 Funk WAV；失败时显示具体错误。
+5. `/listen` 试听实验室复用最近一次真实录音，支持直接试听缓存结果或重新提交同一输入，便于模型效果 A/B。
 
 ## 当前实现
 
@@ -29,6 +30,7 @@
 - `GET /api/generations/{id}/audio/{variant}`：播放 Funk 的 WAV。
 - `GET /api/health`：报告当前显式选择的 provider；远端模式额外报告 CUDA worker 健康状态。
 - `GET /api/debug/logs?since=<cursor>`：返回最近的后端阶段日志，供桌面调试窗口显示。
+- `GET /listen`：打开固定输入试听实验室；配套 `GET /api/listen/sample`、`GET /api/listen/cached` 和 `POST /api/listen/generate`。
 
 ## 验收标准
 
