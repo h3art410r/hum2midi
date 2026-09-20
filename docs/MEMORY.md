@@ -127,3 +127,9 @@
 - 按该反馈生成任务 `de4265fdb91441999bfe660fb53ff99a` 已完成五个结果；五条英文 prompt 均已缩短，保留原始节奏/旋律身份作为核心约束，等待新的端到端试听反馈。
 - 远端服务器只负责 HTTPS 入口和代理，不下载模型、不执行推理。
 
+## 2026-09-21：官方负向 Prompt 与共享 Prosody 缓存
+
+- 已核对 DiffSynth-Music 官方 Quick Start 和本地官方实现：`negative_prompt` 不是由另一个模型临时生成，也不是按 Funk/Lo-fi 名称随意改写；官方调用直接读取 `pipe.default_negative_prompt`。新版本两个风格共用这一官方值，并把实际文本、模型版本写入任务诊断。
+- `negative_template_inputs` 与文本 `negative_prompt` 是两条不同的 CFG 分支。Prosody-only 按官方示例把同一份 Prosody 波形传给正、负模板输入；不能用文本负向词替代，也不能把它解释成降噪。
+- 固定输入、种子、CFG 和步数的首轮 A/B 只改变正向风格 prompt。只有确认可复现的具体伪影后，才允许把很短的实验性负向后缀作为独立变量，不能直接覆盖官方基线。
+- 论文和 pipeline 都支持 KV memory 复用。新后端先做一次官方 `extract_prosody` 和正/负模板 KV cache，再顺序用同一对 cache 生成 Funk、Lo-fi；两种风格共用同一条件，单模型常驻以避免 16GB 显存同时加载两套采样状态。缓存只在单任务生命周期内保留。

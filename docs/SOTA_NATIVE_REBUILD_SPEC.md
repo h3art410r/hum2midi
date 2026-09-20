@@ -174,6 +174,34 @@ soft bass, subtle texture, and a memorable arrangement.
 
 后续只允许一次修改一个变量：prompt、seed、CFG、步数、音频条件强度或输入预处理。每个实验都要保存输入和输出，不能凭印象混合比较。
 
+### 6.1 负向 Prompt 的来源与生成规则
+
+`negative_prompt` 不由另一个大模型现场改写，也不根据 Funk 或 Lo-fi 的名称随意编写。官方 DiffSynth-Music Quick Start 直接使用 `pipe.default_negative_prompt`；它是随模型代码提供的稳定基线，服务于文本条件的 classifier-free guidance（CFG）负向分支。新后端必须在 Worker 启动时从已加载的 pipeline 读取这个值，并把实际发送的文本和模型版本写入任务诊断，不能把它硬编码成一段可能过期的副本。
+
+两个风格在第一阶段共用同一个官方负向 Prompt。这样 A/B 比较只改变正向风格描述，避免负向词同时改变而无法判断效果。负向 Prompt 只用于压制官方默认描述中的低保真、静态噪声、削波、明显失调和旋律不连贯等失败特征；它不应该写成“不要 Funk”“不要 Lo-fi”，也不应该否定 Prosody 需要保留的旋律和节奏。
+
+调用形态固定为：
+
+```python
+negative_prompt = pipe.default_negative_prompt
+
+audio = template(
+    pipe,
+    prompt=style_prompt,
+    negative_prompt=negative_prompt,
+    lyrics="",
+    duration=prosody.shape[1] / 48000,
+    seed=42,
+    tiled=True,
+    cfg_scale=4,
+    num_inference_steps=50,
+    template_inputs=[{"model_id": 1, "audio": prosody}],
+    negative_template_inputs=[{"model_id": 1, "audio": prosody}],
+)
+```
+
+这里有两种不同的负向输入：文本 `negative_prompt` 是文字 CFG 分支；`negative_template_inputs` 是 Prosody 模板的音频 CFG 分支，官方示例把同一份 Prosody 条件传给正、负两侧。第一阶段两者都按官方写法执行。只有在固定输入、固定种子和官方参数下确认某一类可重复的音频伪影后，才允许新增一条很短的实验性负向后缀；每个后缀必须单独记录并与官方默认值盲听对照，不能直接替换生产基线。
+
 ## 7. 论文原文复核
 
 原文：<https://arxiv.org/abs/2609.12774>；官方实现说明：<https://diffsynth-studio-doc.readthedocs.io/en/latest/Model_Details/DiffSynth-Music.html>。
@@ -210,6 +238,21 @@ soft bass, subtle texture, and a memorable arrangement.
 2. 如果 Prosody-only 听不出哼唱节奏，下一项合理实验是按论文定义加入 Control 条件，而不是修改 MIDI 或把原始音频混回输出。
 3. Reference 只用于风格/音色实验，不能用来修复旋律和节奏。
 4. 任何显存或速度优化都必须保留模板 KV 的计算和复用语义；不能为了省显存重写模板 forward 或改变条件注入位置。
+
+### 6.5 共享 Prosody 条件的架构决策
+
+论文把模板音频编码成每层的 KV memory，并在采样期间复用这份 memory；官方 pipeline 也公开了 `kv_cache` 和 `negative_kv_cache` 参数。因此一次任务应该先把输入规范化、`extract_prosody` 和正负 Prosody 模板缓存做完，再用同一对缓存分别生成 Funk 和 Lo-fi：
+
+```text
+真实哼唱
+  -> 官方输入规范化
+  -> extract_prosody（只做一次）
+  -> Prosody 正/负模板 KV cache（只做一次）
+       ├─ Funk prompt  -> pipe(kv_cache=..., negative_kv_cache=...)
+       └─ Lo-fi prompt -> pipe(kv_cache=..., negative_kv_cache=...)
+```
+
+两个变体仍然顺序运行，共用一个常驻模型实例，避免 16GB 显存同时保留两套采样状态；缓存只在当前任务期间存在，两个结果结束后释放。两次生成首轮使用相同 seed、CFG 和 steps，确保差异主要来自风格 prompt；前端按变体独立更新，先完成的结果先展示。这个封装只使用官方公开的 KV 输入，不修改 DiT forward、模板注入位置或负向 CFG 语义。
 
 ## 8. 后端结构
 
