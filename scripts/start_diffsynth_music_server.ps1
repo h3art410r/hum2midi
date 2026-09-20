@@ -1,13 +1,20 @@
 param(
   [int]$Port = 8765,
   [string]$Python = $env:DIFFSYNTH_PYTHON,
-  [ValidateSet("cpu", "dit_cuda", "none")]
-  [string]$OffloadMode = $env:DIFFSYNTH_OFFLOAD_MODE
+  [string]$OffloadMode
 )
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 if (-not $Python) { $Python = "python" }
+$ModeFile = Join-Path $RepoRoot "remote\worker_mode.txt"
+if (-not $OffloadMode -and (Test-Path $ModeFile)) {
+  $OffloadMode = (Get-Content $ModeFile -Raw).Trim()
+}
+if (-not $OffloadMode) { $OffloadMode = $env:DIFFSYNTH_OFFLOAD_MODE }
 if (-not $OffloadMode) { $OffloadMode = "cpu" }
+if ($OffloadMode -notin @("cpu", "dit_cuda", "none")) {
+  throw "Invalid offload mode '$OffloadMode'. Use cpu, dit_cuda, or none."
+}
 $Venv = Join-Path $RepoRoot ".venv-diffsynth"
 $DiffSynthDir = Join-Path $RepoRoot ".vendor\DiffSynth-Studio"
 if (-not (Test-Path (Join-Path $Venv "Scripts\python.exe"))) {

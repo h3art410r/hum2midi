@@ -2,6 +2,12 @@
 
 这份说明是给负责 GPU Worker 部署的 Agent 读取的。Worker 运行在 Windows + RTX 5060 Ti 16GB，开发机 FastAPI 通过 `http://192.168.9.100:8765` 调用它。Worker 只负责加载模型和生成音频，不修改前端、后端任务逻辑或提示词。
 
+## 当前任务目标
+
+当前目标是直接测量 DiT 常驻显存是否能提速，**当前模式必须是 `dit_cuda`，不需要重复 `cpu` 基线**。仓库文件 `remote/worker_mode.txt` 是当前实验目标，启动脚本不带参数时会自动读取它。
+
+只有 `dit_cuda` 启动或推理发生 OOM，才允许临时切回 `cpu`，并把 OOM 原文和发生阶段报告给主 Agent。
+
 ## 更新和启动
 
 每次收到“更新 Worker”或“切换显存模式”的任务，先在仓库目录执行：
@@ -10,19 +16,19 @@
 git pull origin main
 ```
 
-默认安全模式启动：
+按仓库当前目标启动（自动读取 `remote/worker_mode.txt`）：
 
 ```powershell
-.\scripts\start_diffsynth_music_server.ps1 -Port 8765 -OffloadMode cpu
+.\scripts\start_diffsynth_music_server.ps1 -Port 8765
 ```
 
-用于速度 A/B 的 DiT 常驻显存模式：
+也可以显式写出当前目标：
 
 ```powershell
 .\scripts\start_diffsynth_music_server.ps1 -Port 8765 -OffloadMode dit_cuda
 ```
 
-`dit_cuda` 是实验模式，16GB 显存可能 OOM；发生 OOM 时停止 Worker，改回 `-OffloadMode cpu` 重启。`none` 会完全关闭 VRAM 管理，只能在明确要求时使用。
+`dit_cuda` 是实验模式，16GB 显存可能 OOM；它是当前必须执行的速度实验。发生 OOM 时停止 Worker，改回 `-OffloadMode cpu` 重启，并报告原始错误。`none` 会完全关闭 VRAM 管理，只能在明确要求时使用。
 
 ## 启动后验收
 
