@@ -47,6 +47,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_diffsynth_work
 - `pipe.default_negative_prompt` 和同一份 Prosody 负向模板；
 - 默认 `tiled=True`、CFG 4、50 steps、seed 42、输出时长等于 Prosody 条件时长；
 - 输出通过 `soundfile` 保存为 48kHz PCM WAV，避免 TorchCodec 可选依赖导致保存失败。
+- 如果当前 `torchaudio` 安装把读取转发到缺失的 TorchCodec，Worker 会记录该事件并用 `soundfile` 读取已经规范化的 PCM WAV；张量形状、48kHz 和 3840 对齐保持与官方加载器一致。
 
 Worker 的详细阶段日志可读：
 
