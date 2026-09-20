@@ -4,9 +4,9 @@
 
 ## 当前任务目标
 
-当前目标是直接测量 DiT 常驻显存是否能提速，**当前模式必须是 `dit_cuda`，不需要重复 `cpu` 基线**。仓库文件 `remote/worker_mode.txt` 是当前实验目标，启动脚本不带参数时会自动读取它。
+当前生产实验目标是 `cpu` 安全路径。它不是把整套模型放到 CPU 上运行，而是让主模型按层动态换入、模板 block 在 CPU 与 CUDA 之间分页；仓库文件 `remote/worker_mode.txt` 是当前目标，启动脚本不带参数时会自动读取它。该路径已经在真实 10.943 秒录音、Control + Prosody、CFG4、steps10 上验证峰值约 7.84GiB。
 
-只有 `dit_cuda` 启动或推理发生 OOM，才允许临时切回 `cpu`，并把 OOM 原文和发生阶段报告给主 Agent。
+`dit_cuda` 仅用于明确的速度对照实验；它在 16GB 卡上可能 OOM，不得作为常驻默认。`none` 会完全关闭 VRAM 管理，只能在明确要求时使用。
 
 ## 常驻启动和自动更新
 
@@ -28,7 +28,7 @@ Worker 现在由守护脚本负责生命周期。首次部署时先停止手动�
 .\scripts\start_diffsynth_music_server.ps1 -Port 8765
 ```
 
-但不要让它和守护脚本同时监听 8765。`dit_cuda` 是实验模式，16GB 显存可能 OOM；发生 OOM 时应修改 `remote/worker_mode.txt` 为 `cpu` 并提交，让守护脚本自动切换，然后报告原始错误。`none` 会完全关闭 VRAM 管理，只能在明确要求时使用。
+但不要让它和守护脚本同时监听 8765。发生 OOM 时先保留 `/debug/logs` 中的原始阶段和显存数据，再检查是否误改了 `remote/worker_mode.txt` 或关闭了模板 CPU offload。
 
 ## 启动后验收
 
@@ -57,4 +57,4 @@ Invoke-RestMethod http://127.0.0.1:8765/health | ConvertTo-Json
 Invoke-RestMethod "http://127.0.0.1:8765/debug/logs?since=0&limit=500" | ConvertTo-Json -Depth 12
 ```
 
-日志包含模板正负分支、Pipeline Unit、模型设备切换、每个 DiT 正负 CFG forward、每个 denoise step、VAE 解码、保存和显存峰值。不要把音频内容、密钥或完整 prompt 写入 Worker 日志。
+日志包含模板正负分支、模板 cache 合并、`CUDA_BEFORE_TEMPLATE`/`CUDA_AFTER_TEMPLATE_*`、Pipeline Unit、模型设备切换、每个 DiT 正负 CFG forward、每个 denoise step、VAE 解码、保存和显存峰值。不要把音频内容、密钥或完整 prompt 写入 Worker 日志。

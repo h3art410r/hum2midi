@@ -1,5 +1,13 @@
 # 当前决策（2026-09-18）
 
+## 2026-09-21：16GB Worker 显存闭环
+
+- `dit_cuda` 在 Control + Prosody、10.943 秒输入上会在负向模板阶段 OOM；即使设置 15.15GiB 动态预算，实测峰值仍约 27GB。
+- 根因不是模型推理必然需要 17GB，而是自定义调用 `TemplatePipeline.call_single_side` 时没有包 `torch.no_grad()`，模板前向图把权重和中间激活留在 CUDA；同时两个模板 cache 也不应同时以 BF16 常驻。
+- Worker 构建 `e954ec9` 已切回 `remote/worker_mode.txt=cpu`，并启用：模板按 block CPU offload、Control/Prosody cache 在 CPU 合并、正负相同 cache 复用、模板推理 `no_grad`。8-bit KV 压缩保留为可选环境变量，默认关闭以保持精度。
+- 同一真实录音、Control + Prosody、CFG4、denoising 0.65、seed101 的 steps5 任务 `a65be9d9fc` 成功完成：总耗时 60.83 秒、输出 10.96 秒、峰值 allocated 7.85GiB、reserved 7.88GiB；steps10 任务 `dbf3648c5f` 也成功，峰值同样 7.84GiB、总耗时 62.33 秒。
+- 结论：16GB 显存完全够用，当前安全路径不依赖 WDDM 超额分配；如果未来输入时长显著增加，先观察 `/debug/logs` 的阶段显存，再考虑显式开启 `DIFFSYNTH_QUANTIZE_TEMPLATE_KV=1`。
+
 ## 2026-09-20：DiT 常驻 CUDA 性能 A/B
 
 - Worker 已按 `remote/worker_mode.txt` 使用 `DIFFSYNTH_OFFLOAD_MODE=dit_cuda` 启动，健康检查返回 RTX 5060 Ti、构建 `3d09604`，模型加载约 38.2 秒。

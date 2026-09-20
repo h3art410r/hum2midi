@@ -5,7 +5,7 @@ This directory is the Windows/CUDA DiffSynth-Music worker. Read `docs/DIFFSYNTH_
 ## One-time deployment
 
 - Pull `origin/main` before the first deployment. Do not start the raw worker and the daemon at the same time.
-- `remote/worker_mode.txt` is the current experiment target. It is currently `dit_cuda`; do not silently replace it with `cpu`.
+- `remote/worker_mode.txt` is the current experiment target. It is currently `cpu`, the validated 16GB-safe path; do not silently switch it to `dit_cuda`.
 - Stop any manually launched `start_diffsynth_music_server.ps1` process, then start the resident daemon once:
 
   ```powershell
@@ -29,5 +29,5 @@ This directory is the Windows/CUDA DiffSynth-Music worker. Read `docs/DIFFSYNTH_
 ## Runtime and recovery
 
 - Verify `/health` after the first startup and after an automatic redeploy. It must show the expected `offload_mode`, current `build`, `control+prosody`, both templates, and the RTX 5060 Ti.
-- If `dit_cuda` produces an out-of-memory error, restore `cpu` explicitly and report the error; do not hide it or fall back silently. Update `remote/worker_mode.txt` in Git so the daemon uses the intended recovery mode after its next pull.
+- Keep the CPU template paging and `torch.no_grad()` path enabled. If `dit_cuda` is used for an explicit A/B test and OOMs, restore `cpu` in `remote/worker_mode.txt` and report the original phase/logs; do not hide the failure or silently fall back.
 - If the daemon is stopped, do not start the raw worker alongside a stale daemon. Stop the old daemon process first, then start the daemon again.
