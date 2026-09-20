@@ -129,7 +129,8 @@ async def create_generation(request: Request) -> JSONResponse:
     cfg_scale = request.headers.get("x-diffsynth-cfg-scale", "4").strip()
     steps = request.headers.get("x-diffsynth-steps", "10").strip()
     seed = request.headers.get("x-diffsynth-seed", "101").strip()
-    denoising_strength = request.headers.get("x-diffsynth-denoising-strength", "0.65").strip()
+    denoising_strength_raw = request.headers.get("x-diffsynth-denoising-strength", "0.65").strip()
+    denoising_strength = "" if denoising_strength_raw.lower() in {"off", "none", "disabled", "null"} else denoising_strength_raw
     if requested_preset:
         _backend_log(
             f"legacy preset header ignored; generating the Funk plan requested={requested_preset}",
