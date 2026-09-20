@@ -1,124 +1,47 @@
-# 项目实验记忆
+# 当前决策（2026-09-18）
 
-## 2026-09-16：SoundFont 中间版本
+## 2026-09-20：单 Funk 快速性能基线
 
-- Git 初始提交：`4b00575`，tag：`v0.1.0-soundfont`。
-- FluidSynth 2.6.0 + GeneralUser GS 已在 Windows 本机实渲染成功。
-- 应用通过 `app/audio_renderer.py` 自动选择 SoundFont；缺少外部音源时回退程序化合成器。
-- 二进制和音源在被忽略的 `data/` 目录，不进入 Git。
+- 当前链路只生成一个 Funk 结果，固定 `Control + Prosody`、CFG 4、steps 10、seed 101、denoising strength 0.65；前端不显示调参面板，参数写入请求和后端日志。
+- 真实录音任务 `8608ed2c6a2546d28b012fea99e4808d`（输入 10.943 秒）已完成：上传和 ffmpeg 归一化约 0.55 秒，模型请求耗时 130.15 秒，输出 10.96 秒；性能瓶颈在远端模型请求，不在开发机上传、转码或任务轮询。
+- 第一轮提交因客户端把表单字段 `control` 错写为 `control+prosody` 被旧 Worker 立即 HTTP 400 拒绝，已修复为 `control=prosody` + `control_profile=control_prosody`，修复提交为 `db421dd`。
+- Worker 需要拉取 `db421dd` 并重启，才能看到新增的 `INPUT_DECODED`、`CONDITIONING_READY`、`MODEL_INFER_START/DONE`、显存峰值和 `AUDIO_SAVE_DONE` 分段日志；开发机后端已重启并运行新代码。
 
-## 2026-09-16：发散研究结论
+用户否定旧“创意分”，体感惊艳仅 0.1；此前通过声学代理门不能证明创意及格。当前转向提示词工程：每轮五个差异明显的纵向方案，前端展示完整内容，用户比较最好/最差并给听感反馈。遵循只需认得出原哼唱，创意评结构和抓耳程度。未反馈候选均待评。 
 
-- 只扩充 MIDI 音符会很快变成“正确但像循环”的 Demo。
-- 真实感主要来自采样层、演奏法、力度/微时差、段落动态和总线处理，而不是继续收紧 MIDI Prompt。
-- SF2 适合通用基线；SFZ 更适合力度分层、round-robin、keyswitch、legato 和真实鼓组行为。后续可评估开源 `sfizz` 与 CC0 的 VSCO/VCSL 素材。
-- 更大胆的路线是让云端模型输出段落、角色、演奏法和能量曲线组成的 `ArrangementGraph`，再由程序生成 MIDI 与渲染控制，而不是让模型只返回音符数组。
+当前改为五个纵向方案，编号 1–5，分别探索旋律蓝图、律动钩子、和声重作、结构推进、完整再创作。每次上传生成五个结果；本轮重绘强度回退到 0.20、0.30、0.40、0.50、0.60，用于定位 Stable Audio 开始丢失原始节奏的临界点。任务保存英文 prompt、中文参考译文和参数快照。固定种子 101 用于比较，不代表已获听感认可。中文只供我们查看，不发送给模型。
 
-## 2026-09-16：演奏层实验
+下面是历史实验记录；其中“通过”和“更有创意”仅指当时的代理指标，已被上述判定取代。
 
-- `arrangement_to_midi()` 新增 GM `CC7/CC10/CC91/CC93`：音量、声像、混响、合唱。
-- 非主奏伴奏使用 `H2M_PERFORMANCE_SEED` 产生可复现的微小时差和力度变化；主奏的核心起音、时值和音高保持不变。
-- `app/audio_renderer.py` 新增段落能量弧线：开头渐入、第二段轻推、结尾收束；FluidSynth 输出最后统一归一化到峰值 0.82。
-- 单元测试从 18 项增加到 19 项，全部通过。
+# 项目记忆
 
-## 2026-09-16：真实端到端复测
+## 2026-09-17：Stable Audio 本地音频闭环
 
-- 输入：项目已有真实哼唱 M4A（小星星，两句 14 音）。
-- job：`47401e1804974ddfae21b59d0b64c0b9`。
-- canonical MIDI：14 音，102.56 BPM，句界 5.64 秒。
-- Funk 风格 MIDI：106 音；Lofi 风格 MIDI：48 音。
-- 两个音频路由 HTTP 200，API `renderers` 均为 `fluidsynth-soundfont`。
-- 音符数量、BPM 和 MIDI 往返校验没有因演奏层变化而退化。
-- 当前尚未把“惊艳度”视为机器已证明的指标，必须继续用手机盲听 A/B。
+- 主流程是：真实录音 → ffmpeg 归一化为 44.1kHz 双声道 WAV → Stable Audio 3 TFLite `sm-music` audio-to-audio → 五个纵向方案 WAV。
+- 模型权重和推理环境位于仓库同级的 `stable-audio-3-local/optimized/tflite`，不进入 Git；当前开发机使用 LiteRT/XNNPACK CPU。
+- Stable Audio provider 位于 `app/stable_audio.py`，通过官方 CLI 子进程调用。主 API 不调用其他音频理解模型，也不使用本地 mock 输出。
+- 输出时长读取规范化输入 WAV 的实际时长；输入时长不可读时才使用 10 秒兜底。
+- 固定种子 `101`；五个方案的 `init_noise_level` 为 0.35、0.58、0.75、0.88、0.97，分别探索音色、律动、和声、结构和激进再创作。禁止源录音底噪和原始人声泄漏。哪个方向最好、哪个最差由用户试听决定。
 
-## 下一轮执行顺序
+## 2026-09-17：真实测试与公网入口
 
-1. 为 Funk/Lofi 建立轻量专用采样 profile 和演奏法映射。
-2. 让风格模型输出段落/能量元数据，程序生成可解释的 ArrangementGraph。
-3. 用固定 seed 做多个可复现的人性化版本，保留自动旋律约束并做盲听选择。
-4. 评估 SFZ 专用库和可选的云端最终总线处理；任何新服务都要记录成本、延迟、许可证和旋律保持率。
+- 用户真实录音完整测试任务 `c2144eee7a04486b96c76c4244d40755`：输入与两个输出均为 10.516 秒，两个音频路由均返回 HTTP 200。
+- 页面通过 `/api/debug/logs` 轮询后端阶段日志，覆盖上传、ffmpeg、排队、五个方案开始、完成和失败。
+- 公网入口为 `https://kr.sunyongfei.cn/hum2midi/`。远端 Nginx `/hum2midi/` 代理到远端 `127.0.0.1:18000`，开发机用 SSH reverse forwarding 接回本地 8000；模型始终只在开发机运行。
+- `scripts/start_hum2midi_tunnel.ps1` 会在隧道断开后每 5 秒重连，用户启动目录已配置自动启动脚本。
+- 4 项单元测试通过，Python 编译、前端 JavaScript 语法和公网健康接口均已验证。
 
-## 2026-09-16：demo 生产机部署
+## 2026-09-17：历史声学诊断（不再作为验收）
 
-- 目标机：`ubuntu@kr.sunyongfei.cn`，Ubuntu 24.04 / Python 3.12。
-- 部署目录：`/home/ubuntu/hum2midi`；systemd 服务 `hum2midi.service`，Uvicorn 监听 8000。
-- 已安装 FFmpeg、FluidSynth、`fluid-soundfont-gm`；服务器健康检查报告 `fluidsynth-soundfont`。
-- Nginx 已做 80→8000 反代，并由 Certbot 配置 HTTPS，HTTP 自动 301 到 `https://kr.sunyongfei.cn`。
-- API 密钥通过服务器 `.env` 注入，权限 600，不进入 Git、页面或日志。
-- 远程真实录音 job `fe96c26e463d472c857ddf76c69a8398` 完成：canonical 14 音，Funk/Lofi 风格 MIDI 137/46 音符，两个音频接口返回 200。
-- 部署细节见 `docs/DEPLOY.md`。
+- `docs/audio_eval.py` 和早期候选报告保留作回归排查；其中的频谱“创意分”不能代表用户是否觉得惊艳，也不能标记产品通过。
+- `docs/iterate_stable_audio.py` 现在固定真实输入并保存五组纵向方案候选，报告中的听感状态保持 `pending`，等待用户比较五个结果。
+- 真实 HTTP 任务只能证明链路成功、输出可播放和时长正确；听感仍由 `docs/listening_eval.py` 记录。
 
-## 2026-09-16：线上试听响度修复
+## 当前决策
 
-- 线上 SoundFont WAV 的原始峰值约 `-1.7 dBFS`，但平均电平约 `-18.7/-16.8 dBFS`，确认问题是动态范围偏大，不是前端播放器音量被设低。
-- SoundFont 母带新增轻度总线压缩（Funk ratio 2.2、Lofi ratio 2.5）和补偿增益，峰值目标从 `-1.7 dBFS` 提到 `-0.7 dBFS`，同时保留段落能量弧线与停顿。
-- 生产机已重启并重渲染 `fe96c26e463d472c857ddf76c69a8398`；新测得 Funk 平均电平 `-16.7 dB`、Lofi `-15.8 dB`，两个接口继续返回 200。
-- 音频接口增加 `Cache-Control: no-store`，避免浏览器继续播放响度修复前缓存的同名 WAV。
-
-## 2026-09-16：低音量原始录音修复
-
-- 复查用户原始 M4A 发现源文件峰值约 `-11.6 dBFS`，此前的峰值母带修复无法解决“原始录音试听很小”，低电平还会触发“没有检测到足够清晰的连续哼唱音符”。
-- `app/main.py` 的分析副本转换增加 FFmpeg `loudnorm=I=-14:TP=-1.0:LRA=7`；只归一化服务端分析副本，不改写用户上传的原始文件。用同一真实录音线上复测得到 14 音、两句、102.56 BPM，说明归一化没有改变旋律结果。
-- `app/static/index.html` 的原始试听通过 Web Audio 2.4x makeup gain 与软压缩播放，保留原始上传字节；不依赖把 HTML audio 的 `volume` 设到超过 1。
-- `app/audio_renderer.py` 增加 RMS 复测、软限幅和两轮有效段增益，避免 Lofi 因高峰均比被单纯峰值归一化压回低音量。线上重渲染 job `09d79eef1be2448b8645ce58d3f13bd4`：Funk 平均 `-12.4 dB`、峰值 `-1.7 dBFS`；Lofi 平均 `-13.7 dB`、峰值 `-0.7 dBFS`。
-- 本轮 `.venv\Scripts\python.exe -m unittest discover -s tests -q`：19 项通过。
-
-## 2026-09-16：平板页面可用性修复
-
-- iPad/触摸设备此前被 `min-width:760px` 误套电脑端 16:9 固定高度，页面 `overflow:hidden` 导致下方“生成我的版本”按钮被裁掉。现在 16:9 只对 `min-width:1024px` 且支持 hover 的桌面调试视图启用，触摸设备使用自然高度和滚动页面。
-- 录音圆形按钮增加 iOS 长按保护：禁止选字、拖拽、系统 callout 和 gesturestart，避免长按复制页面文字。
-- 已部署并通过线上页面内容校验：`https://kr.sunyongfei.cn/`，健康检查正常。
-
-## 2026-09-17：音准细节保留实验
-
-- 真实录音当前 YIN、独立谐波频谱和 Basic Pitch 基准的整数音高基本一致；剩余听感偏差主要来自人声滑音及整数半音量化丢失的音分。Qwen Omni 直接逐音输出仍会生成固定重复音，不能作为精确替代。
-- `pitch_tracking.py` 为每个事件保存 `pitch_cents`（稳定基频相对整数 MIDI 的音分偏移）；`ir.py` 在 note-on 前写入标准 MIDI pitchwheel（默认 GM ±2 半音范围），整数音符、起点及时值保持不变，回放可跟随真实演唱的细微音高。
-- 19 项既有单元测试通过；真实录音生成的 MIDI 往返仍为 14 个事件，新增 pitchwheel 不改变 `midi_summary` 的音符时间线。
-- pYIN/Praat 离线交叉实验未比当前 YIN 减少稳定音符错误，且首次 pYIN 编译耗时很高，因此不纳入线上路径。
-
-- 线上 `melody` 调试数据现额外返回 `pitch_cents`，页面音符详情显示音分偏移，便于现场确认“整数音名正确但播放仍偏”的情况。
-
-- canonical MIDI 现在显式设置 GM Pitch Bend Range 为 ±2 半音（RPN 101/100/6/38），避免不同播放器对 `pitch_cents` 的解释不一致。
-
-## 2026-09-17：尾部同音碎片修复
-
-- 生产机最近三份真实录音均在结尾出现同音短片段（约 0.21–0.26 秒）被误切成额外音符，导致 15 音。新增保守合并：相邻同 MIDI 音、间隔接近零且一段小于 0.30 秒时合并。三份输入均稳定为 14 音；20 项测试通过，快速重复音符测试未被合并。
-- 修复已部署至 `kr.sunyongfei.cn`，生产机直接重跑三份现有 `audio_16k.wav` 均得到 14 音，健康检查正常。
-
-## 2026-09-17：转谱 review 重构与多模态 A/B
-
-- 不再在 `main.py` 里分支堆叠 provider；`app/transcription.py` 现在定义 `TranscriptionEngine` 协议，并提供 `DspTranscriptionEngine` 与可选 `KlangioTranscriptionEngine`。`TRANSCRIPTION_ENGINE=auto` 仅在配置 `KLANGIO_API_KEY` 时选择云端，云端错误不会静默 fallback。
-- Qwen Omni 的两种窄任务实验（完整 MIDI JSON、±1 半音候选选择）都未达到逐音可靠性；实验脚本保留在 `docs/probe_multimodal_note_ranking.py`，结果写入 `docs/MODEL_REVIEW.md`，没有污染生产路径。
-- YIN、Basic Pitch、pYIN、Praat 的交叉结果支持当前整数音高轮廓；剩余误差主要是人声滑音/音分和“实际哼唱”与“标准曲谱”的目标差异。
-- 新增 Klangio Vocal→MIDI provider adapter，采用官方异步转录任务和 MIDI 下载接口。没有配置密钥时不宣称效果通过；下一次应在同一原始 WAV 上做 DSP vs Klangio 的盲测，记录准确率、延迟、费用和失败率。
-- review 重构已提交为 `5588099` 并同步到 `kr.sunyongfei.cn`。线上健康检查正常；真实原始 M4A 新 job `1c1ef1b50322406abe3e6087f2516d90` 完成，14 音、102.56 BPM、Funk/Lofi 音频均由 FluidSynth SoundFont 返回 200。该 job 同时记录了 `cloud_pitch_contour` 和实际 `transcription_engine=dsp-yin`，便于后续对照。
-- 随机候选 A/B 复测：同一真实 WAV 的 3 个音符、每个 2 次、候选顺序随机，Qwen Omni 命中率 `0/6`；回答标签随音符固定为 A/C，映射到的实际音高随顺序变化。该证据支持停止把通用 Omni 当逐音音高判别器。
-- 整段候选复测：候选复用原始人声片段和节奏，仅改整段音高序列，3 次随机顺序选择为 `smoothed`、`motif`、`smoothed`，没有选择 DSP 实测序列；因此也不能把通用 Omni 当作可靠的旋律校正器。
-- 调研并接入腾讯多媒体实验室 `vocalMidi` provider：官方能力是人声转录、计算音高和区间并输出 MIDI/JSON。由于腾讯任务只接受可访问 URL，应用新增随机 job id 的临时规范化 WAV 路由；启用前需要 `TENCENT_SECRET_ID`、`TENCENT_SECRET_KEY`、`H2M_PUBLIC_BASE_URL`，没有凭据不宣称效果。
-- 线上新增 `melody.wav` canonical MIDI 试听路由和页面卡片；job `64595c59ed27486687168b6c65a54904` 实测 `renderers.melody=fluidsynth-soundfont`，可直接与原始录音及两种风格音频盲听对照。
-- Basic Pitch 参数扫描结果：默认参数 23 个碎音；提高 onset/frame 阈值虽能得到 14–15 个音，但会吞重复音或错配起音，不能稳定优于 DSP 基线，未进入生产。
-- 调性候选 A/B：以结尾音推断大调、将半音边界音映射到级内音，保留原人声音质感和节奏；Qwen Omni 4 次随机复测选 `dsp` 2 次、`smoothed` 1 次、`diatonic` 1 次，结果不稳定，未自动应用。
-- Omni 相邻半音间隔实验：Plus/Flash 都能数到 14 音两句，但同一 Prompt 给出不同且错误的间隔序列，故不进入逐音校正链路。
-
-## 2026-09-17：撤回统计旋律意图修正
-
-- `app/melody_intent.py` 的大调映射和重复音对规则已撤回。它在当前录音上看似能恢复标准旋律，但这是把统计假设直接写进 MIDI，可能把用户真实旋律改错，不能作为默认修正。
-- 之前的 A/B 产物和 job（`3a4632f9ea1647b9ac0aaecffc8c1157`、`c81de4cea364420d88f7961c10315c2a`）保留作反例记录，不再代表当前实现。
-
-## 2026-09-17：旋律语义记忆 A/B
-
-- 新方案使用 `app/melody_semantic.py` 调用 Qwen 文本模型，只发送测量 MIDI 的相对音程、简谱结构和节奏信息；不发送歌名、外部曲谱或联网资料。
-- 模型必须返回 `similarity`、简谱和等长音高序列。只有 `similarity` 与 `confidence` 都达到 0.90 才改音高；起音、时值、句界、音符数量始终取声学测量。低相似、非法响应或超时都保留 measured MIDI，并记录 `melody_semantic` 诊断。
-- Qwen Plus 对当前 14 音序列返回了与常见简谱高度相似的等长修正；Qwen Flash 返回不相似。此结果需要继续用盲测验证，不能把模型自报分数当成准确率。
-
-## 2026-09-17：切换为云端简谱语义校正
-
-- 按负责人反馈移除了统计/规则旋律意图层，不再用大调映射或重复音对规则直接改 MIDI。
-- 新增 `app/melody_semantic.py`：只发送近似简谱、音符数和乐句大小给云端 Qwen 模型，禁止歌名、外部曲谱和联网。模型返回最多 3 个记忆候选；只有最高候选 `similarity` 与 `confidence` 均达到 0.90、简谱等长且旋律轮廓不冲突时才改音高。
-- 节奏严格来自 DSP：模型不能改变 start、duration、phrase boundary、音符数；模型不可用、低相似、响应不合法时保留 measured MIDI。
-- 默认模型改为 `qwen3.5-plus`。同一真实 14 音录音连续 5 次均返回 `[1,1,5,5,6,6,5,4,4,3,3,2,2,1]`，按首音锚定后为 `[44,44,51,51,53,53,51,49,49,48,48,46,46,44]`，5/5 次起音和时值未变。另一段 15 音录音返回 `similar=false`，音高 15/15 保持不变。
-- 生产端到端 job `4acf5f2227f8429a83daf97690b3fd1c` 已验证：语义模型为 `qwen3.5-plus`，14 音修正 8 个，Funk/Lofi 与 A/B melody 音频均生成成功。
-
-## 2026-09-17：桌面宽屏底部裁切修复
-
-- 桌面 16:9 调试外壳此前固定高度并使用 `overflow:hidden`，日志、结果卡片和旋律调试区变高时会裁掉页面底部。现在桌面外壳以 16:9 高度作为最小画布，内容超出时自然增高并由页面滚动；生成结果仍会显式展开外壳，重录时恢复初始布局。触摸设备布局保持不变。
+- 只保留音频到音频的 Stable Audio 端到端路径。
+- 结果必须与输入同长，并尽量让用户听出原始哼唱的节奏与旋律身份。
+- 2026-09-18 新一轮真实测试任务 `390147af28624b68a6727bf9fa96dd77` 已生成 1–5 五个中间强度方案，参数为 0.76、0.78、0.80、0.83、0.86；提示词明确要求“旋律蓝图/新主旋律”，禁止把哼唱逐音翻奏成弦乐。等待用户听感反馈。
+- 用户反馈方案 3/4 的风格方向可以，但原始哼唱节奏已经听不出来，且约束太多。后续 prompt 已压缩为：只要求原始节奏和旋律身份可辨认，其余创作完全开放；仅保留去除原始哼唱与底噪的清理要求。
+- 按该反馈生成任务 `de4265fdb91441999bfe660fb53ff99a` 已完成五个结果；五条英文 prompt 均已缩短，保留原始节奏/旋律身份作为核心约束，等待新的端到端试听反馈。
+- 远端服务器只负责 HTTPS 入口和代理，不下载模型、不执行推理。
