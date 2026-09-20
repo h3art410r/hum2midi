@@ -19,7 +19,7 @@
 
 > 用户上传一段真实哼唱，系统理解它的旋律与节奏，生成一段完整的风格化音乐，并且让用户仍然听得出原始哼唱的音乐身份。
 
-第一阶段只做一个风格：Funk。先把一条稳定、可解释、可重复测试的端到端链路跑通。
+第一阶段固定生成两个风格：Funk 和 Lo-fi。两个变体共用同一份真实输入和 Prosody 条件，只改变风格 prompt；先把一条稳定、可解释、可重复测试的端到端链路跑通。
 
 ## 2. 设计原则
 
@@ -134,6 +134,10 @@ result = template(
 torchaudio.save("output.wav", result, 48000)
 ```
 
+`prompt` 描述希望生成的音乐，`negative_prompt=pipe.default_negative_prompt` 提供文本条件的负向分支。采样时 CFG 会比较正向和负向预测，放大正向 prompt 相对于负向 prompt 的差异，从而减少默认负向描述中的不良音乐特征。它不是在否定用户的哼唱，也不是音频降噪；第一阶段直接沿用官方默认负向 prompt。
+
+`negative_template_inputs` 是另一套机制：它给 Prosody 音频条件提供负向分支。官方示例把同一份 prosody 条件同时传给正、负模板输入，这是模板 CFG 的标准写法，不能与文本 `negative_prompt` 混为一谈。
+
 ### 5.1 哼唱输入的适配
 
 官方 Prosody 示例对完整歌曲先调用 `pipe.extract_track(..., track="vocals")`，再提取 Prosody。我们的输入本身就是人声哼唱，因此新版本不做 Demucs vocal 分离，也不调用 `extract_track`：
@@ -155,12 +159,17 @@ prosody = extract_prosody(audio)
 
 ## 6. Prompt 初始版本
 
-模型收到的 prompt 先保持短而明确，避免用文字重述旋律，让音频条件承担旋律和节奏约束：
+模型收到的两个 prompt 先保持短而明确，避免用文字重述旋律，让音频条件承担旋律和节奏约束：
 
 ```text
 An energetic instrumental funk track with a strong bass groove,
 syncopated drums, rhythmic guitar, tight keyboard accents,
 and a memorable arrangement.
+```
+
+```text
+A warm, laid-back lo-fi instrumental with dusty drums, mellow keys,
+soft bass, subtle texture, and a memorable arrangement.
 ```
 
 后续只允许一次修改一个变量：prompt、seed、CFG、步数、音频条件强度或输入预处理。每个实验都要保存输入和输出，不能凭印象混合比较。
@@ -215,6 +224,8 @@ Python + FastAPI，提供：
 - `GET /api/health`：报告后端和模型 Worker 状态。
 - `GET /api/debug/logs`：查看阶段日志。
 
+一次任务包含 `funk` 和 `lofi` 两个独立变体。后端必须在每个变体完成时立即更新任务状态和音频 URL；前端轮询到任意一个 `completed` 变体后就立即展示该结果，不等待另一个变体。只有两个变体都完成或明确失败后，任务才进入最终状态。
+
 API 服务不加载 GPU 模型。它通过内部 Worker 客户端提交音频和参数，并保存任务元数据。
 
 ### 6.2 GPU Worker
@@ -248,7 +259,7 @@ diagnostics.json
 每次实验用同一段真实哼唱，至少评价两件事：
 
 1. **旋律身份**：前半段和后半段是否都能听出来自同一段原始哼唱。
-2. **风格完成度**：是否已经是完整的 Funk 编曲，而不是原始哼唱加一条伴奏。
+2. **风格完成度**：Funk 和 Lo-fi 是否分别成为完整编曲，而不是原始哼唱加一条伴奏。
 
 性能、频谱相似度和响度只能作为诊断数据，不能替代试听结论。
 
@@ -276,9 +287,9 @@ diagnostics.json
 ## 11. 第一阶段实施顺序
 
 1. 创建干净的模型适配模块和 Worker API。
-2. 按官方示例实现最小单任务推理。
+2. 按官方示例实现最小单任务推理，并为 Funk、Lo-fi 建立两个变体。
 3. 用一段真实录音完成离线 Worker 验证。
-4. 接入 FastAPI 任务状态和试听页面。
+4. 接入 FastAPI 任务状态和试听页面；任何先完成的变体立即可试听。
 5. 固定质量基线，再开始性能和显存实验。
 6. 只有当第一候选模型无法达到旋律身份门槛时，才引入第二个模型做对照。
 
