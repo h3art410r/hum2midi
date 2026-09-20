@@ -161,6 +161,8 @@ prosody = extract_prosody(audio)
 
 模型收到的两个 prompt 先保持短而明确，避免用文字重述旋律，让音频条件承担旋律和节奏约束：
 
+官方没有 Funk 或 Lo-fi 的内置正向 Prompt。官方 Quick Start 只提供一个通用音乐描述示例；下面两段是项目自己的风格配置，不应标记为模型默认值。模型默认值只存在于 `pipe.default_negative_prompt`，负向分支按 6.1 节原样读取。
+
 ```text
 An energetic instrumental funk track with a strong bass groove,
 syncopated drums, rhythmic guitar, tight keyboard accents,
@@ -176,7 +178,7 @@ soft bass, subtle texture, and a memorable arrangement.
 
 ### 6.1 负向 Prompt 的来源与生成规则
 
-`negative_prompt` 不由另一个大模型现场改写，也不根据 Funk 或 Lo-fi 的名称随意编写。官方 DiffSynth-Music Quick Start 直接使用 `pipe.default_negative_prompt`；它是随模型代码提供的稳定基线，服务于文本条件的 classifier-free guidance（CFG）负向分支。新后端必须在 Worker 启动时从已加载的 pipeline 读取这个值，并把实际发送的文本和模型版本写入任务诊断，不能把它硬编码成一段可能过期的副本。
+`negative_prompt` 不由另一个大模型现场改写，也不根据 Funk 或 Lo-fi 的名称随意编写。官方 DiffSynth-Music Quick Start 直接使用 `pipe.default_negative_prompt`；它是随模型代码提供的稳定基线，服务于文本条件的 classifier-free guidance（CFG）负向分支。新后端必须在 Worker 启动时从已加载的 pipeline 读取这个值，并把实际发送的文本和模型版本写入任务诊断，不能把它硬编码成一段可能过期的副本。官方没有对应风格的正向默认值，正向风格词必须单独标记为项目配置。
 
 两个风格在第一阶段共用同一个官方负向 Prompt。这样 A/B 比较只改变正向风格描述，避免负向词同时改变而无法判断效果。负向 Prompt 只用于压制官方默认描述中的低保真、静态噪声、削波、明显失调和旋律不连贯等失败特征；它不应该写成“不要 Funk”“不要 Lo-fi”，也不应该否定 Prosody 需要保留的旋律和节奏。
 
