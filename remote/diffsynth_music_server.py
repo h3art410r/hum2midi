@@ -274,16 +274,20 @@ def _render_with_timings(
     PIPE.load_models_to_device([])
     _release_temporary_cuda_memory()
     _log_cuda_memory("CUDA_BEFORE_TEMPLATE", request_id)
+    def call_template(inputs):
+        with torch.no_grad():
+            return TEMPLATE.call_single_side(pipe=PIPE, inputs=inputs)
+
     if control_profile != "prosody" and len(template_inputs) == 2:
         # Control and Prosody are both full DiT template models.  Generate one
         # cache at a time, immediately move it to RAM, and merge on CPU.  The
         # previous implementation kept both caches and the merge result on
         # CUDA at once, which is what pushed this 16 GB card past its limit.
-        control_cache = TEMPLATE.call_single_side(pipe=PIPE, inputs=[template_inputs[0]])
+        control_cache = call_template([template_inputs[0]])
         _worker_log("TEMPLATE_CONTROL_DONE", request_id, keys=sorted(control_cache))
         control_cache = _move_template_cache(control_cache, "cpu")
         _release_temporary_cuda_memory()
-        prosody_cache = TEMPLATE.call_single_side(pipe=PIPE, inputs=[template_inputs[1]])
+        prosody_cache = call_template([template_inputs[1]])
         _worker_log("TEMPLATE_PROSODY_DONE", request_id, keys=sorted(prosody_cache))
         prosody_cache = _move_template_cache(prosody_cache, "cpu")
         _release_temporary_cuda_memory()
@@ -298,7 +302,7 @@ def _render_with_timings(
             template_cache = _move_template_cache(merged_cache, "cuda")
         del control_cache, prosody_cache, merged_cache
     else:
-        template_cache = TEMPLATE.call_single_side(pipe=PIPE, inputs=template_inputs)
+        template_cache = call_template(template_inputs)
     timings["template_positive_seconds"] = time.perf_counter() - started
     _worker_log(
         "TEMPLATE_POSITIVE_DONE", request_id,
@@ -328,7 +332,7 @@ def _render_with_timings(
         _log_cuda_memory("CUDA_AFTER_TEMPLATE_NEGATIVE_REUSE", request_id)
     else:
         started = time.perf_counter()
-        negative_template_cache = TEMPLATE.call_single_side(pipe=PIPE, inputs=negative_template_inputs)
+        negative_template_cache = call_template(negative_template_inputs)
         timings["template_negative_seconds"] = time.perf_counter() - started
         _worker_log(
             "TEMPLATE_NEGATIVE_DONE", request_id,
