@@ -5,7 +5,7 @@ This directory is the Windows/CUDA DiffSynth-Music worker. Read `docs/DIFFSYNTH_
 ## One-time deployment
 
 - Pull `origin/main` before the first deployment. Do not start the raw worker and the daemon at the same time.
-- `remote/worker_mode.txt` must remain `official`. The worker follows the official DiffSynth-Music model-card VRAM configuration and TemplatePipeline call; do not add alternate execution modes or custom cache/layer paging logic.
+- `remote/worker_mode.txt` must remain `official`. The worker follows the official DiffSynth-Music model-card VRAM configuration and TemplatePipeline call; do not add custom cache/layer paging logic. `remote/worker_memory_profile.txt` defaults to `official`; the explicitly documented `resident_prosody` value is an opt-in A/B that only keeps the Prosody template eager on CUDA and must not become the default.
 - Stop any manually launched `start_diffsynth_music_server.ps1` process, then start the resident daemon once:
 
   ```powershell

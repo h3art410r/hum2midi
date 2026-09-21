@@ -6,6 +6,8 @@
 
 当前 Worker 只保留官方模型卡的推理路径：`remote/diffsynth_music_server.py` 使用官方的低显存 `ModelConfig`、`TemplatePipeline.from_pretrained(..., lazy_loading=True)` 和官方 `TemplatePipeline(...)` 调用。`remote/worker_mode.txt` 必须是 `official`。
 
+默认显存配置由 `remote/worker_memory_profile.txt` 控制，内容为 `official`。这是当前线上配置：完整基础模型按官方低显存管理，Prosody 模板按请求懒加载，Worker 进程本身常驻但权重会在阶段之间卸载。`resident_prosody` 只用于显存 A/B：它只把一个约 8.3GB 的 Prosody 模板常驻 CUDA，基础模型仍按官方低显存管理；它不代表整套模型都能放进 16GB，也不支持 Control/Prosody 组合。实验失败时把文件改回 `official`，daemon 会自动重启回滚后的 Worker。
+
 不要加入 denoising anchor、KV cache 合并或量化、模板层 CPU 分页、负分支 cache 复用、手工镜像 pipeline、模型 forward monkey-patch 等逻辑。需要观察性能时只读日志，不改变模型调用。
 
 首次部署时先停止手动启动的 raw Worker，再在仓库根目录启动常驻守护脚本：

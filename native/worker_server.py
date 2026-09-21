@@ -26,6 +26,16 @@ HOST = os.getenv("DIFFSYNTH_SERVER_HOST", "0.0.0.0")
 PORT = int(os.getenv("DIFFSYNTH_SERVER_PORT", "8765"))
 TOKEN = os.getenv("DIFFSYNTH_REMOTE_TOKEN", "")
 BUILD = os.getenv("H2M_WORKER_BUILD", "unknown")
+# The default stays on the official low-VRAM path.  ``resident_prosody`` is
+# an explicit A/B profile: it keeps only the Prosody template on CUDA while
+# the base models continue to use the official layer manager.  Keeping all
+# weights resident is not realistic on a 16 GB card because one template is
+# already about 8.3 GB before activations and the base model are considered.
+MEMORY_PROFILE = os.getenv("DIFFSYNTH_MEMORY_PROFILE", "official").strip().lower()
+if MEMORY_PROFILE not in {"official", "resident_prosody"}:
+    raise RuntimeError(
+        "DIFFSYNTH_MEMORY_PROFILE must be 'official' or 'resident_prosody'"
+    )
 WORK_DIR = Path(os.getenv("NATIVE_WORKER_DIR", "runtime/native_worker_jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -60,6 +70,18 @@ def _log(event: str, request_id: str | None = None, **fields: object) -> None:
 def _vram_limit_gb() -> float:
     _free, total = torch.cuda.mem_get_info("cuda")
     return total / (1024**3) - 0.5
+
+
+def _cuda_memory() -> dict[str, float | None]:
+    """Return current (not peak) CUDA memory for residency comparisons."""
+    if not torch.cuda.is_available():
+        return {"allocated_gb": None, "reserved_gb": None, "free_gb": None}
+    free, _total = torch.cuda.mem_get_info("cuda")
+    return {
+        "allocated_gb": torch.cuda.memory_allocated() / 1024**3,
+        "reserved_gb": torch.cuda.memory_reserved() / 1024**3,
+        "free_gb": free / 1024**3,
+    }
 
 
 def _load_wav_without_torchcodec(path: Path, division_factor: int) -> torch.Tensor:
@@ -131,6 +153,10 @@ def _model_configs() -> list[ModelConfig]:
 
 
 def _template_configs() -> list[ModelConfig]:
+    if MEMORY_PROFILE == "resident_prosody":
+        # TemplatePipeline maps model_id to the position in this list.  A
+        # single eager Prosody template therefore uses model_id=0 below.
+        return [ModelConfig(model_id=MODEL_ID, origin_file_pattern="template_prosody/")]
     # Keep official model_id numbering: control=0, prosody=1, reference=2.
     return [
         ModelConfig(model_id=MODEL_ID, origin_file_pattern="template_control/"),
@@ -144,7 +170,7 @@ def load_models() -> None:
     if MODEL_READY:
         return
     started = time.perf_counter()
-    _log("MODEL_LOAD_START", model_id=MODEL_ID, build=BUILD)
+    _log("MODEL_LOAD_START", model_id=MODEL_ID, build=BUILD, memory_profile=MEMORY_PROFILE)
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is unavailable; native DiffSynth Worker requires the GPU machine")
     PIPE = DiffSynthMusicPipeline.from_pretrained(
@@ -158,7 +184,10 @@ def load_models() -> None:
         torch_dtype=torch.bfloat16,
         device="cuda",
         model_configs=_template_configs(),
-        lazy_loading=True,
+        # The A/B profile eagerly loads the one template used by this worker
+        # and holds it in the long-lived process.  Official mode keeps all
+        # templates lazy and preserves the documented low-VRAM behavior.
+        lazy_loading=MEMORY_PROFILE != "resident_prosody",
     )
     MODEL_READY = True
     _log(
@@ -167,7 +196,13 @@ def load_models() -> None:
         execution="official_prosody_quick_start",
         vram_limit_gb=f"{_vram_limit_gb():.3f}",
         compute_dtype="bfloat16",
-        templates="control,prosody,reference(lazy)",
+        templates=(
+            "prosody(resident)"
+            if MEMORY_PROFILE == "resident_prosody"
+            else "control,prosody,reference(lazy)"
+        ),
+        memory_profile=MEMORY_PROFILE,
+        **{f"cuda_{key}": f"{value:.3f}" if value is not None else "none" for key, value in _cuda_memory().items()},
     )
 
 
@@ -189,6 +224,9 @@ def health() -> dict[str, object]:
         "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none",
         "vram_limit_gb": _vram_limit_gb() if torch.cuda.is_available() else None,
         "compute_dtype": "bfloat16",
+        "memory_profile": MEMORY_PROFILE,
+        "template_residency": "cuda_eager" if MEMORY_PROFILE == "resident_prosody" else "disk_lazy",
+        **{f"cuda_{key}": value for key, value in _cuda_memory().items()},
         "worker_busy": GENERATION_LOCK.locked(),
     }
 
@@ -221,6 +259,8 @@ def generate(
         raise HTTPException(401, "Invalid worker token")
     if control not in {"prosody", "control", "prosody_control"}:
         raise HTTPException(400, "Native Worker supports prosody, control, and prosody_control conditioning")
+    if MEMORY_PROFILE == "resident_prosody" and control != "prosody":
+        raise HTTPException(400, "resident_prosody profile only supports prosody conditioning")
     if not prompt.strip():
         raise HTTPException(400, "Prompt is required")
     if not GENERATION_LOCK.acquire(blocking=False):
@@ -274,8 +314,9 @@ def generate(
             torch.cuda.synchronize()
         infer_started = time.perf_counter()
         if control == "prosody":
-            template_inputs = [{"model_id": 1, "audio": prosody}]
-            negative_template_inputs = [{"model_id": 1, "audio": prosody}]
+            prosody_model_id = 0 if MEMORY_PROFILE == "resident_prosody" else 1
+            template_inputs = [{"model_id": prosody_model_id, "audio": prosody}]
+            negative_template_inputs = [{"model_id": prosody_model_id, "audio": prosody}]
         elif control == "control":
             template_inputs = [{"model_id": 0, "audio": waveform}]
             negative_template_inputs = [{"model_id": 0, "audio": waveform}]
@@ -297,6 +338,7 @@ def generate(
             request_id,
             execution="official_template_pipeline",
             control=control,
+            memory_profile=MEMORY_PROFILE,
             template_models=','.join(str(item["model_id"]) for item in template_inputs),
         )
         result = TEMPLATE(
@@ -322,7 +364,16 @@ def generate(
         sf.write(str(output_path), result.detach().float().cpu().numpy().T, 48000, subtype="PCM_16")
         save_elapsed = time.perf_counter() - save_started
         total_elapsed = time.perf_counter() - started
-        _log("AUDIO_SAVE_DONE", request_id, elapsed=f"{save_elapsed:.3f}s", total=f"{total_elapsed:.3f}s")
+        _log(
+            "AUDIO_SAVE_DONE",
+            request_id,
+            elapsed=f"{save_elapsed:.3f}s",
+            total=f"{total_elapsed:.3f}s",
+            **{
+                f"cuda_{key}": f"{value:.3f}" if value is not None else "none"
+                for key, value in _cuda_memory().items()
+            },
+        )
         return FileResponse(
             output_path,
             media_type="audio/wav",
