@@ -40,14 +40,14 @@
     <main>
       <div class="eyebrow">Official Prosody Check</div>
       <h1>先把官方第五个样例跑明白。</h1>
-      <p class="intro">左侧是 DiffSynth-Music 官方 Input 5：只有 Prosody 条件；右侧是你最近一次真实哼唱的结果。按钮会用官方 Input 5 的 prompt、lyrics、seed、CFG 和 50 steps，把同一段哼唱再跑一遍 Prosody-only，作为真正可比的对照。</p>
+      <p class="intro">左侧是 DiffSynth-Music 官方 Input 5：只有 Prosody 条件；右侧是你最近一次真实哼唱的结果。页面把“官方样例原本的带歌词版本”和“你的输入按官方参数、不填歌词的版本”分开，避免把两条音频混在一起。</p>
       <section class="grid">
         <article class="panel">
           <h2>官方 Input 5</h2>
           <p class="muted">模型仓库随附的官方 Prosody 输入和输出，不经过本项目的上传、归一化或 Control 条件。</p>
           <h3>官方 Prosody 输入</h3>
           <audio controls preload="metadata" src="static/official/audio_5_input.mp3"></audio>
-          <h3>官方生成输出</h3>
+          <h3>官方生成输出（官方歌词）</h3>
           <audio controls preload="metadata" src="static/official/audio_5_output.mp3"></audio>
           <div id="officialParams" class="params"></div>
           <p class="muted">正向 prompt：<span id="officialPrompt"></span></p>
@@ -59,8 +59,15 @@
           <audio id="userSource" controls preload="metadata"></audio>
           <div id="previousResults"></div>
           <div class="result">
-            <button id="rerun">按官方 Input 5 参数重跑 Prosody-only</button>
+            <h3>官方参数重跑（不填歌词）</h3>
+            <p class="muted">同一段最近输入，使用官方 Prosody-only 参数；歌词为空。下面这条就是刚才完成的无歌词实验。</p>
+            <audio controls preload="metadata" src="static/official/audio_5_output_no_lyrics.wav"></audio>
+            <p class="muted">无歌词实验：seed=42 · CFG=4 · 50 steps · Prosody-only · 时长 10.48 秒</p>
+          </div>
+          <div class="result">
+            <button id="rerun">按官方 Input 5 参数重跑（带官方歌词）</button>
             <div id="rerunStatus" class="status" role="status" aria-live="polite"></div>
+            <h3 id="rerunHeading" class="hidden">本次重跑输出（带官方歌词）</h3>
             <audio id="rerunAudio" class="hidden" controls preload="metadata"></audio>
           </div>
         </article>
@@ -109,7 +116,7 @@
       } catch (error) { document.querySelector('#userMeta').textContent = `读取失败：${error.message}`; log('ERROR', error.message); }
     }
     function showRerun(state) {
-      const audio = document.querySelector('#rerunAudio'); audio.classList.remove('hidden'); audio.src = api(state.audio_url); document.querySelector('#rerunStatus').textContent = `官方 Prosody-only 已完成，耗时 ${state.elapsed_seconds || ''} 秒。`;
+      const audio = document.querySelector('#rerunAudio'); audio.classList.remove('hidden'); document.querySelector('#rerunHeading').classList.remove('hidden'); audio.src = api(state.audio_url); document.querySelector('#rerunStatus').textContent = `带官方歌词的 Prosody-only 对照已完成，耗时 ${state.elapsed_seconds || ''} 秒。无歌词实验请试听上方单独标注的音频。`;
       document.querySelector('#rerun').disabled = false;
     }
     async function pollRerun() {
