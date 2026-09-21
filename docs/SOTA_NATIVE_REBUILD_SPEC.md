@@ -81,7 +81,7 @@ class MusicModel:
 
 官方文档：<https://diffsynth-studio-doc.readthedocs.io/en/latest/Model_Details/DiffSynth-Music.html>。官方 Quick Start 的共同流程是：加载基础 `DiffSynthMusicPipeline`，加载三个 template 权重，准备某一种控制音频，调用 `TemplatePipeline`，最后以 48kHz 保存输出。
 
-官方 Prosody-only 管线的等价最小代码如下。代码保留官方调用语义，省略服务端队列和 HTTP 封装。当前为改善哼唱的起音/节奏保持，在同一 `TemplatePipeline` 调用中按论文的联合条件规则增加 `model_id=0` Control；Prosody-only 仍保留用于 A/B：
+官方 Prosody-only 管线的等价最小代码如下。代码保留官方调用语义，省略服务端队列和 HTTP 封装。正式链路严格使用这一调用形态，只传入 `model_id=1` 的 Prosody 条件；`model_id=0` 的 Control 仅保留给后续显式 A/B：
 
 ```python
 import torch
@@ -194,7 +194,7 @@ idea with subtle variation, and no vocals.
 - `native/static/index.html`：手机优先页面和 `?debug=16x9` 桌面调试视图；
 - `scripts/run_diffsynth_worker_daemon.ps1`：常驻守护进程现在启动 `native.worker_server:app`，并在主分支更新后自动重启模型子进程。
 
-这一步按官方接口顺序生成两个风格，共用同一份 Control + Prosody 条件，不启用 Reference、`target_audio` 或自定义 KV cache。共享条件只在单任务生命周期内复用，Funk 和 Lo-fi 仍顺序运行以适应显存。
+这一步按官方接口顺序生成两个风格，共用同一份 Prosody 条件，不启用 Control、Reference、`target_audio` 或自定义 KV cache。Funk 和 Lo-fi 仍顺序运行以适应显存。
 
 ### 6.1 负向 Prompt 的来源与生成规则
 

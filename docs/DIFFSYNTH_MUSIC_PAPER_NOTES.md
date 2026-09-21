@@ -31,8 +31,8 @@ template_inputs=[
 
 固定同一个 prompt、seed、时长和 50 steps，只改变控制条件，生成三组：
 
-1. Prosody only：当前旧基线。
-2. Control + Prosody：当前新默认，验证旋律身份和节奏保持。
+1. Prosody only：当前正式基线，严格复现官方 Input 5 的条件形态。
+2. Control + Prosody：仅用于显式 A/B，验证额外条件是否确实改善旋律身份和节奏保持。
 3. Control + Prosody + Reference：只在第 2 组节奏稳定后加入短参考片段，观察音色/制作质量是否提升；Reference 不用于修复节奏。
 
 验收先听“是否还是同一段哼唱的节奏和旋律”，再听创意和制作质量。若组合控制过强导致创意下降，优先降低文本约束、换 prompt 和 seed，不先破坏音频控制条件。
