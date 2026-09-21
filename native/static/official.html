@@ -49,6 +49,9 @@
           <audio controls preload="metadata" src="static/official/audio_5_input.mp3"></audio>
           <h3>官方生成输出（官方歌词）</h3>
           <audio controls preload="metadata" src="static/official/audio_5_output.mp3"></audio>
+          <h3>官方生成输出（不填歌词）</h3>
+          <audio controls preload="metadata" src="static/official/audio_5_output_no_lyrics.wav"></audio>
+          <p class="muted">同一个官方 Input 5 输入、同一套官方参数，唯一变化是 lyrics 为空。</p>
           <div id="officialParams" class="params"></div>
           <p class="muted">正向 prompt：<span id="officialPrompt"></span></p>
         </article>
@@ -60,7 +63,7 @@
           <div class="result">
             <h3>当前输入 · 官方参数重跑（不填歌词）</h3>
             <p class="muted">这是你最近一次输入按官方 Prosody-only 参数重新生成的结果，不是上一次 Funk/Lo-fi 任务，也没有填入歌词。</p>
-            <audio controls preload="metadata" src="static/official/audio_5_output_no_lyrics.wav"></audio>
+            <audio controls preload="metadata" src="static/official/user_output_no_lyrics.wav"></audio>
             <p class="muted">无歌词实验：seed=42 · CFG=4 · 50 steps · Prosody-only · 时长 10.48 秒</p>
           </div>
           <div class="result">
