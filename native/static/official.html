@@ -44,6 +44,13 @@
       <div class="eyebrow">Official Prosody Check</div>
       <h1>先把官方第五个样例跑明白。</h1>
       <p class="intro">左侧是 DiffSynth-Music 官方 Input 5，官方样例本身带歌词。右侧是你最近一次真实哼唱：最上面是当前输入按官方 Prosody-only 参数重跑、且不填歌词的结果；下面的 Funk 和 Lo-fi 明确是上一次任务的输出。</p>
+      <section class="panel">
+        <h2>直接重跑最近一次哼唱</h2>
+        <p class="muted">调试阶段不用重新录音或上传。点击后会使用最近一次已完成任务保存的真实哼唱，并立即按当前代码中的 Funk/Lo-fi prompt 和负向 prompt 生成一组新结果。</p>
+        <button id="rerun">直接生成当前提示词</button>
+        <div id="rerunStatus" class="status">等待操作。</div>
+        <div id="rerunResults" class="grid"></div>
+      </section>
       <section class="grid">
         <article class="panel">
           <h2>官方 Input 5</h2>
@@ -95,6 +102,9 @@
     const logBox = document.querySelector('#log');
     const log = (...parts) => { logBox.textContent += `[${new Date().toLocaleTimeString()}] ${parts.join(' ')}\n`; logBox.scrollTop = logBox.scrollHeight; };
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const rerun = document.querySelector('#rerun');
+    const rerunStatus = document.querySelector('#rerunStatus');
+    const rerunResults = document.querySelector('#rerunResults');
     let latest = null;
     async function request(path, options = {}) {
       log('REQ', options.method || 'GET', path);
@@ -119,6 +129,35 @@
         box.appendChild(article);
       });
     }
+    function renderRerun(job) {
+      rerunStatus.textContent = job.message || job.status || '生成中…';
+      rerunResults.innerHTML = '';
+      Object.values(job.variants || {}).forEach(item => {
+        const article = document.createElement('article'); article.className = 'panel';
+        const audio = item.status === 'completed' ? `<audio controls preload="metadata" src="${api(item.audio_url)}"></audio>` : '';
+        const detail = item.status === 'failed' ? `生成失败：${esc(item.error || '')}` : item.status === 'completed' ? `已完成，耗时 ${esc(item.elapsed_seconds || '')} 秒` : `状态：${esc(item.status || '')}`;
+        const prompts = `<details><summary>查看本次 Prompt</summary><p class="muted"><b>正向：</b>${esc(item.prompt || '')}<br><br><b>负向：</b>${esc(item.negative_prompt || '')}</p></details>`;
+        article.innerHTML = `<h2>${esc(item.name || item.id)}</h2><p class="muted">${esc(item.translation || '')}</p>${audio}<p class="muted">${detail}</p>${prompts}`;
+        rerunResults.appendChild(article);
+      });
+    }
+    async function pollRerun(id) {
+      for (let i = 0; i < 900; i++) {
+        const job = await request(`/api/generations/${id}`);
+        renderRerun(job);
+        if (['completed', 'partial', 'failed'].includes(job.status)) return;
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      throw new Error('等待超过 15 分钟');
+    }
+    rerun.addEventListener('click', async () => {
+      rerun.disabled = true; rerunStatus.textContent = '正在使用最近一次哼唱提交…'; rerunResults.innerHTML = '';
+      try {
+        const created = await request('/api/generations/recent', {method:'POST'});
+        log('RERUN_JOB', created.id); await pollRerun(created.id);
+      } catch (error) { rerunStatus.textContent = `生成失败：${error.message}`; log('ERROR', error.message); }
+      finally { rerun.disabled = false; }
+    });
     async function load() {
       try {
         const data = await request('/api/comparison/official');

@@ -134,7 +134,7 @@ result = template(
 torchaudio.save("output.wav", result, 48000)
 ```
 
-`prompt` 描述希望生成的音乐，`negative_prompt=pipe.default_negative_prompt` 提供文本条件的负向分支。采样时 CFG 会比较正向和负向预测，放大正向 prompt 相对于负向 prompt 的差异，从而减少默认负向描述中的不良音乐特征。它不是在否定用户的哼唱，也不是音频降噪；第一阶段直接沿用官方默认负向 prompt。
+`prompt` 描述希望生成的音乐，`negative_prompt` 提供文本条件的负向分支。采样时 CFG 会比较正向和负向预测，放大正向 prompt 相对于负向 prompt 的差异。正式的 5–15 秒哼唱任务使用项目按风格配置的短负向文本，针对原始人声、底噪、短片段空白和旋律漂移；官方对照任务不传自定义字段时仍使用 `pipe.default_negative_prompt`。负向文本不是在否定用户的哼唱，也不是音频降噪。
 
 `negative_template_inputs` 是另一套机制：它给 Prosody 音频条件提供负向分支。官方示例把同一份 prosody 条件同时传给正、负模板输入，这是模板 CFG 的标准写法，不能与文本 `negative_prompt` 混为一谈。
 
@@ -159,20 +159,27 @@ prosody = extract_prosody(audio)
 
 ## 6. Prompt 初始版本
 
-模型收到的两个 prompt 先保持短而明确，避免用文字重述旋律，让音频条件承担旋律和节奏约束：
+模型收到的两个 prompt 保持短而明确：音频 Prosody 条件承担旋律和节奏，文字只指定短片段的器乐重编方向、快速进入钩子和去除原始人声，不写固定音符或外部曲名：
 
-官方没有 Funk 或 Lo-fi 的内置正向 Prompt。官方 Quick Start 只提供一个通用音乐描述示例；下面两段是项目自己的风格配置，不应标记为模型默认值。模型默认值只存在于 `pipe.default_negative_prompt`，负向分支按 6.1 节原样读取。
+官方没有 Funk 或 Lo-fi 的内置正向 Prompt。官方 Quick Start 只提供一个通用音乐描述示例；下面两段以及各自的负向文本是项目针对短哼唱输入的配置，不应标记为模型默认值。官方对照仍使用 `pipe.default_negative_prompt`。
 
 ```text
-An energetic instrumental funk track with a strong bass groove,
-syncopated drums, rhythmic guitar, tight keyboard accents,
-and a memorable arrangement.
+Create a short, hook-first instrumental funk reinterpretation of the supplied hummed melody.
+Keep its recognizable melodic contour, note timing, phrase rhythm, and pauses as the central hook,
+but replace the voice with a lively pocket of syncopated drums, deep elastic bass, rhythmic guitar,
+clavinet, and tight brass accents. Make the short 5–15 second phrase feel like a polished, memorable
+funk idea with tasteful variation, and no vocals.
 ```
 
 ```text
-A warm, laid-back lo-fi instrumental with dusty drums, mellow keys,
-soft bass, subtle texture, and a memorable arrangement.
+Create a short, hook-first instrumental lo-fi reinterpretation of the supplied hummed melody.
+Keep its recognizable melodic contour, note timing, phrase rhythm, and pauses as the central hook,
+but replace the voice with dusty pocket drums, mellow electric piano, soft bass, gentle chord color,
+and restrained tape texture. Make the short 5–15 second phrase feel like a warm, memorable lo-fi
+idea with subtle variation, and no vocals.
 ```
+
+对应的项目负向文本也按风格配置，完整英文、中文译文和实验记录见 `docs/PROMPT_EXPERIMENTS.md`。
 
 后续只允许一次修改一个变量：prompt、seed、CFG、步数、音频条件强度或输入预处理。每个实验都要保存输入和输出，不能凭印象混合比较。
 
@@ -191,14 +198,14 @@ soft bass, subtle texture, and a memorable arrangement.
 
 ### 6.1 负向 Prompt 的来源与生成规则
 
-`negative_prompt` 不由另一个大模型现场改写，也不根据 Funk 或 Lo-fi 的名称随意编写。官方 DiffSynth-Music Quick Start 直接使用 `pipe.default_negative_prompt`；它是随模型代码提供的稳定基线，服务于文本条件的 classifier-free guidance（CFG）负向分支。新后端必须在 Worker 启动时从已加载的 pipeline 读取这个值，并把实际发送的文本和模型版本写入任务诊断，不能把它硬编码成一段可能过期的副本。官方没有对应风格的正向默认值，正向风格词必须单独标记为项目配置。
+`negative_prompt` 不由另一个大模型现场改写，也不在每次请求中随机生成。官方对照路径仍直接使用 `pipe.default_negative_prompt`；正式短哼唱路径则使用仓库 `native/prompts.py` 中经过人工设计、按 Funk/Lo-fi 区分的短负向文本，目的是压制原始哼唱泄漏、房间底噪、短片段空白和旋律漂移，同时不否定 Prosody 的旋律/节奏条件。Worker 接收可选的 `negative_prompt` 字段：传入时使用请求值，未传入时回退到 pipeline 默认值，并在响应头和日志记录来源。
 
-两个风格在第一阶段共用同一个官方负向 Prompt。这样 A/B 比较只改变正向风格描述，避免负向词同时改变而无法判断效果。负向 Prompt 只用于压制官方默认描述中的低保真、静态噪声、削波、明显失调和旋律不连贯等失败特征；它不应该写成“不要 Funk”“不要 Lo-fi”，也不应该否定 Prosody 需要保留的旋律和节奏。
+两个风格的负向文本共享同一组“输入清理”和“旋律身份”原则，但保留少量风格相关尾部（Funk 针对浑浊贝斯/无力鼓组，Lo-fi 针对浑浊混音），避免把两种风格的声音问题混成一个负向词。它不写成“不要 Funk”“不要 Lo-fi”，也不否定 Prosody 需要保留的旋律和节奏。
 
 调用形态固定为：
 
 ```python
-negative_prompt = pipe.default_negative_prompt
+negative_prompt = style_config["negative_prompt"]
 
 audio = template(
     pipe,

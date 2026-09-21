@@ -25,7 +25,7 @@ powershell -ExecutionPolicy Bypass -File scripts\start_native_backend.ps1 -Port 
   -> Funk 与 Lo-fi 两个完整 WAV
 ```
 
-参数基线是官方 `tiled=True`、CFG 4、50 steps、seed 42，输出时长取 Prosody 条件长度。模型默认负向文本从 `pipe.default_negative_prompt` 读取；项目只提供 Funk 和 Lo-fi 的短英文正向 prompt，中文译文仅供人工参考。
+参数基线仍是官方 `tiled=True`、CFG 4、50 steps、seed 42，输出时长取 Prosody 条件长度。当前项目为 5–15 秒哼唱配置了按风格区分的英文正向和负向 prompt：正向保留可辨认的旋律/节奏并完成器乐重编，负向清理原始哼唱、底噪和短片段常见伪影；中文译文仅供人工参考。官方对照页仍可显式使用 `pipe.default_negative_prompt`。
 
 ## API
 

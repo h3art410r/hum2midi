@@ -151,6 +151,13 @@
 - 本地编译、FastAPI 路由、PowerShell 解析检查均通过。用真实 `1-哼唱.m4a`（10.516 秒）对当前远端 Worker 做协议冒烟测试：输入对齐到 10.480 秒，steps=1 时 Funk 39.137 秒、Lo-fi 29.265 秒，输出均为 48kHz 双声道 10.480 秒 WAV，Worker 峰值 reserved 约 8.97 GiB。该结果验证了新后端协议和先出先展示逻辑，不代表官方 50 steps 的最终听感基线。
 - 当前主分支提交 `d5a7fe2` 已推送到远端仓库；迁移期间旧 daemon 仍持有旧启动脚本路径，已通过兼容启动入口在下一轮轮询自动切到新 Worker，不需要手动重启 daemon。
 - 开发机已启动 `native.api` 监听 8000，并恢复 `scripts/start_hum2midi_tunnel.ps1` 的反向隧道；公网 `/hum2midi/` 和 `/api/health` 已返回 200。公网 502 的直接原因是隧道进程未运行，不是前后端路由故障。迁移后健康接口已确认 `execution=official_prosody_quick_start`，说明旧 daemon 通过兼容入口自动完成了切换。
+
+## 2026-09-21：短哼唱专用 Funk/Lo-fi Prompt 实验
+
+- 针对 5–15 秒真实哼唱，把项目正向 prompt 改成“短片段、先出钩子、保留可辨认旋律轮廓/时序/乐句节奏/停顿，再替换为器乐编曲”，避免长前奏吞掉输入身份。
+- Funk 与 Lo-fi 各自使用一段简短的负向文本，清理原始哼唱、歌声、房间底噪、削波、静音和未经处理录音；两者只在风格相关的失败特征上有小差异，不再强制共用模型默认负向词。
+- Worker 新增可选 `negative_prompt` 表单字段：正式任务传项目配置，官方对照不传时回退 `pipe.default_negative_prompt`；响应头和日志记录来源。
+- 调试页 `/official` 新增“直接生成当前提示词”按钮，复用最近一次已完成的真实哼唱并创建新任务，便于只改 prompt 后直接试听，无需重新录音或上传。
 - 手机上传补充了文件名编码：前端用 `encodeURIComponent` 发送 `X-Audio-Filename`，后端解码后再取扩展名，避免中文文件名让浏览器在发请求前抛出无响应错误。
 - Native 后端规范化现在明确选择双声道中能量更高的一侧，再复制为两个相同声道；不再让 `ffmpeg -ac 2` 把有效哼唱与弱/噪声声道平均，符合官方 Prosody 输入适配和用户要求。
 - 新 Worker 首轮真实冒烟发现当前 DiffSynth 版本的 `LoadMultiTrackAudio` 会通过 `torchaudio` 要求可选 TorchCodec。已加入仅针对该缺失依赖的 soundfile fallback：保持 `[channels, samples]`、48kHz 和 3840 对齐后继续走官方 `extract_prosody` 与 `TemplatePipeline`，不改模型内部。真实输入单步测试成功：Prosody 0.357 秒、推理 33.305 秒、总计 33.674 秒、峰值 reserved 8.969 GiB，输出 10.480 秒 WAV。

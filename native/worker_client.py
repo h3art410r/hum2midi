@@ -52,6 +52,7 @@ class NativeWorkerClient:
         output: Path,
         *,
         prompt: str,
+        negative_prompt: str | None = None,
         lyrics: str = "",
         seed: int,
         cfg_scale: float,
@@ -68,6 +69,8 @@ class NativeWorkerClient:
             "steps": str(steps),
             "control": control,
         }
+        if negative_prompt:
+            fields["negative_prompt"] = negative_prompt
         body, content_type = _multipart(
             fields,
             "audio",

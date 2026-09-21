@@ -131,7 +131,7 @@ async def prompt_presets() -> dict[str, Any]:
     styles = style_snapshot()
     return {
         "styles": [
-            {"id": key, **value, "negative_prompt_source": "worker.pipe.default_negative_prompt"}
+            {"id": key, **value, "negative_prompt_source": "project.prompt_config"}
             for key, value in styles.items()
         ],
         "parameters": {"seed": SEED, "cfg_scale": CFG_SCALE, "steps": STEPS, "control": CONTROL},
@@ -221,6 +221,57 @@ async def create_generation(request: Request) -> JSONResponse:
     input_seconds = _audio_seconds(normalized)
     if input_seconds is None or input_seconds <= 0:
         raise HTTPException(415, "Could not read the uploaded audio duration")
+    _start_generation_job(
+        job_id,
+        normalized=normalized,
+        source_name=filename,
+        source_sha256=hashlib.sha256(body).hexdigest(),
+        input_seconds=input_seconds,
+    )
+    return JSONResponse({"id": job_id, "status": "queued"}, status_code=202)
+
+
+@app.post("/api/generations/recent", status_code=202)
+async def regenerate_recent_generation() -> JSONResponse:
+    """Queue a fresh run from the newest completed real humming input.
+
+    This is intentionally a debug-only convenience: it reuses the normalized
+    source already stored by the latest completed task, but snapshots the
+    current prompts and parameters into a new task.
+    """
+    previous = _latest_completed_job()
+    if not previous:
+        raise HTTPException(404, "No completed humming input is available yet")
+    source_path = Path(str(previous.get("source_path", "")))
+    if not source_path.is_file() or not source_path.is_relative_to(DATA):
+        raise HTTPException(404, "The latest humming input is no longer available")
+    job_id = uuid.uuid4().hex
+    job_dir = DATA / job_id
+    job_dir.mkdir(parents=True, exist_ok=False)
+    normalized = job_dir / "input-normalized.wav"
+    shutil.copy2(source_path, normalized)
+    input_seconds = _audio_seconds(normalized)
+    if input_seconds is None or input_seconds <= 0:
+        raise HTTPException(415, "Could not read the latest humming input duration")
+    _start_generation_job(
+        job_id,
+        normalized=normalized,
+        source_name=str(previous.get("source_name", "recent-hum.wav")),
+        source_sha256=str(previous.get("source_sha256", "")),
+        input_seconds=input_seconds,
+    )
+    return JSONResponse({"id": job_id, "status": "queued", "source": "latest_completed_input"}, status_code=202)
+
+
+def _start_generation_job(
+    job_id: str,
+    *,
+    normalized: Path,
+    source_name: str,
+    source_sha256: str,
+    input_seconds: float,
+) -> None:
+    """Snapshot the current prompt config and start a native generation task."""
     prompt_data = style_snapshot()
     job: dict[str, Any] = {
         "id": job_id,
@@ -228,8 +279,8 @@ async def create_generation(request: Request) -> JSONResponse:
         "message": "已接收录音，等待 Prosody Worker…",
         "created_at": _now(),
         "source_path": str(normalized),
-        "source_name": filename,
-        "source_sha256": hashlib.sha256(body).hexdigest(),
+        "source_name": source_name,
+        "source_sha256": source_sha256,
         "input_seconds": input_seconds,
         "provider": "DiffSynth-Music Prosody",
         "parameters": {"seed": SEED, "cfg_scale": CFG_SCALE, "steps": STEPS, "control": CONTROL},
@@ -241,6 +292,8 @@ async def create_generation(request: Request) -> JSONResponse:
                 "status": "queued",
                 "prompt": prompt_data[style]["prompt"],
                 "translation": prompt_data[style]["translation"],
+                "negative_prompt": prompt_data[style]["negative_prompt"],
+                "negative_translation": prompt_data[style]["negative_translation"],
             }
             for style in STYLE_ORDER
         },
@@ -249,7 +302,6 @@ async def create_generation(request: Request) -> JSONResponse:
     _save_job(job)
     _log(f"job queued input_seconds={input_seconds:.3f}s styles={','.join(STYLE_ORDER)}", job_id=job_id)
     TASKS[job_id] = asyncio.create_task(_run_generation(job_id))
-    return JSONResponse({"id": job_id, "status": "queued"}, status_code=202)
 
 
 @app.get("/api/generations/{job_id}")
@@ -370,6 +422,7 @@ async def _run_generation(job_id: str) -> None:
                         source,
                         DATA / job_id / f"{style}.wav",
                         prompt=variant["prompt"],
+                        negative_prompt=variant["negative_prompt"],
                         seed=SEED,
                         cfg_scale=CFG_SCALE,
                         steps=STEPS,

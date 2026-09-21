@@ -44,7 +44,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_diffsynth_work
 - `LoadMultiTrackAudio(division_factor=3840)`；
 - 直接对哼唱调用 `extract_prosody`，不做 vocal 分离；
 - `TemplatePipeline` 的 Control `model_id=0` 加 Prosody `model_id=1` 联合条件；Control 从规范化哼唱波形提供起音/节奏信息，Prosody 从同一波形生成保留音高与时间的正弦条件；
-- `pipe.default_negative_prompt` 和同一份 Prosody 负向模板；
+- 正式 Funk/Lo-fi 任务使用 `native/prompts.py` 中按风格配置的负向文本；官方对照任务不传该字段时仍回退到 `pipe.default_negative_prompt`，Prosody 负向模板始终传同一份条件波形；
 - 两条条件分别编码后由官方 `TemplatePipeline` 拼接 KV memory，不拼接波形、不使用 `target_audio`，因此不会把原始哼唱直接混回输出；默认 `tiled=True`、CFG 4、50 steps、seed 42、输出时长等于 Prosody 条件时长；
 - 输出通过 `soundfile` 保存为 48kHz PCM WAV，避免 TorchCodec 可选依赖导致保存失败。
 - 如果当前 `torchaudio` 安装把读取转发到缺失的 TorchCodec，Worker 会记录该事件并用 `soundfile` 读取已经规范化的 PCM WAV；张量形状、48kHz 和 3840 对齐保持与官方加载器一致。
