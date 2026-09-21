@@ -8,10 +8,17 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 if (-not $Python) { $Python = "python" }
 $MemoryProfileFile = Join-Path $RepoRoot "remote\worker_memory_profile.txt"
-if (-not $env:DIFFSYNTH_MEMORY_PROFILE -and (Test-Path $MemoryProfileFile)) {
-  $env:DIFFSYNTH_MEMORY_PROFILE = (Get-Content $MemoryProfileFile -Raw).Trim()
+# The checked-in profile must win over a stale variable inherited by the
+# daemon from an older child process.  Operators can still force a one-off
+# test with DIFFSYNTH_MEMORY_PROFILE_OVERRIDE.
+$ProfileOverride = $env:DIFFSYNTH_MEMORY_PROFILE_OVERRIDE
+if ($ProfileOverride) {
+  $env:DIFFSYNTH_MEMORY_PROFILE = $ProfileOverride.Trim().ToLowerInvariant()
+} elseif (Test-Path $MemoryProfileFile) {
+  $env:DIFFSYNTH_MEMORY_PROFILE = (Get-Content $MemoryProfileFile -Raw).Trim().ToLowerInvariant()
+} else {
+  $env:DIFFSYNTH_MEMORY_PROFILE = "official"
 }
-if (-not $env:DIFFSYNTH_MEMORY_PROFILE) { $env:DIFFSYNTH_MEMORY_PROFILE = "official" }
 if (@("official", "resident_prosody") -notcontains $env:DIFFSYNTH_MEMORY_PROFILE) {
   throw "Invalid DIFFSYNTH_MEMORY_PROFILE '$($env:DIFFSYNTH_MEMORY_PROFILE)'. Use official or resident_prosody."
 }
