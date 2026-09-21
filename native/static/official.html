@@ -5,31 +5,41 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>试听对照 · Hum to Music</title>
   <style>
-    :root { color-scheme: light; --ink:#17211f; --muted:#68716d; --green:#caff4d; --paper:#f6f4ef; --line:#dcded7; }
+    :root { color-scheme:light; --ink:#17211f; --muted:#68716d; --green:#caff4d; --paper:#f6f4ef; --line:#dcded7; }
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; background:#dfe3dc; color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
-    .stage { width:min(100%,1100px); min-height:100vh; margin:auto; padding:clamp(20px,4vw,54px); background:var(--paper); }
+    .stage { width:min(100%,1120px); min-height:100vh; margin:auto; padding:clamp(20px,4vw,54px); background:var(--paper); }
     header { display:flex; justify-content:space-between; align-items:center; gap:16px; }
     .brand { font-size:14px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
     header a { color:var(--ink); text-decoration:none; border:1px solid var(--line); border-radius:999px; padding:8px 14px; font-size:12px; }
-    main { max-width:980px; margin:8vh auto 0; }
+    main { max-width:1000px; margin:7vh auto 0; }
     .eyebrow { color:#4d6d00; font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; }
     h1 { margin:12px 0 10px; max-width:780px; font-size:clamp(38px,6vw,72px); line-height:.98; letter-spacing:-.06em; }
-    .intro { max-width:720px; color:var(--muted); line-height:1.7; }
-    .meta { margin:24px 0 18px; color:var(--muted); font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; }
-    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
-    .card { padding:20px; border:1px solid var(--line); border-radius:20px; background:#fffefa; }
-    .card h2 { margin:0 0 6px; font-size:21px; }
-    .card h3 { margin:18px 0 6px; font-size:13px; }
-    .card p { margin:8px 0; color:var(--muted); line-height:1.6; font-size:13px; }
-    .source { grid-column:1 / -1; background:#202522; color:#f6f4ef; border-color:#202522; }
-    .source p { color:#cbd4cc; }
+    .intro { max-width:740px; color:var(--muted); line-height:1.7; }
+    .panel { margin-top:24px; padding:20px; border:1px solid var(--line); border-radius:20px; background:#fffefa; }
+    .panel h2 { margin:0 0 7px; font-size:21px; }
+    .panel p { margin:7px 0; color:var(--muted); line-height:1.6; font-size:13px; }
+    .meta { color:var(--muted); font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .source { display:grid; grid-template-columns:minmax(0,1fr) 260px; gap:20px; align-items:center; background:#202522; color:#f6f4ef; border-color:#202522; }
+    .source p, .source .meta { color:#cbd4cc; }
     audio { width:100%; margin-top:10px; }
-    details { margin-top:14px; border-top:1px solid var(--line); padding-top:12px; }
+    textarea { width:100%; min-height:76px; resize:vertical; border:1px solid var(--line); border-radius:12px; padding:12px; color:var(--ink); background:#fff; font:14px/1.6 inherit; }
+    .controls { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; }
+    select { border:1px solid var(--line); border-radius:999px; padding:10px 14px; color:var(--ink); background:#fff; font:inherit; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:16px; }
+    .style-card { min-width:0; padding:20px; border:1px solid var(--line); border-radius:20px; background:#fffefa; }
+    .style-card h2 { margin:0; font-size:22px; }
+    .style-card > p { color:var(--muted); font-size:13px; line-height:1.6; }
+    .variant { margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
+    .variant.is-hidden { display:none; }
+    .variant-title { display:flex; justify-content:space-between; gap:10px; align-items:center; font-weight:750; }
+    .tag { color:#4d6d00; font-size:12px; }
+    details { margin-top:12px; border-top:1px solid var(--line); padding-top:10px; }
     summary { cursor:pointer; color:#4d6d00; font-size:13px; font-weight:700; }
-    pre { margin:10px 0 0; white-space:pre-wrap; font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; color:var(--ink); }
-    .foot { margin-top:18px; color:var(--muted); font-size:12px; line-height:1.6; }
-    @media (max-width:760px) { main { margin-top:6vh; } .grid { grid-template-columns:1fr; } .source { grid-column:auto; } }
+    pre { margin:10px 0 0; white-space:pre-wrap; color:var(--ink); font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .foot { margin:18px 0 0; color:var(--muted); font-size:12px; line-height:1.6; }
+    .error { color:#a03a2d; }
+    @media (max-width:760px) { main { margin-top:6vh; } .grid { grid-template-columns:1fr; } .source { display:block; } }
     @media (min-width:1000px) { body.debug-16x9 .stage { min-height:675px; aspect-ratio:16/9; } }
   </style>
 </head>
@@ -38,53 +48,52 @@
     <header><div class="brand">Make Anything Musical</div><a href="./">返回主页</a></header>
     <main>
       <div class="eyebrow">Fixed Listening Check</div>
-      <h1>同一段哼唱，四个结果。</h1>
-      <p class="intro">这是当前调试快照。所有音频都已提前生成，进入页面即可试听，不需要重新录音、上传或等待模型。</p>
-      <p class="meta">输入 10.48 秒 · Prosody-only · seed 42 · CFG 4 · 50 steps · 快照任务 3bd39020847e46c897f3346926f383a2</p>
-      <section class="grid">
-        <article class="card source">
+      <h1>同一段哼唱，四种风格。</h1>
+      <p class="intro">八个结果都已经提前生成。每种风格各有一条带歌词和一条不带歌词的版本，进入页面后直接试听，不会再次调用模型。</p>
+      <section class="panel source">
+        <div>
           <h2>最近一次哼唱</h2>
-          <p>同一份真实输入，下面三个结果都由它生成。</p>
+          <p>四种风格都使用下面这段真实输入，Prosody-only，输出时长与输入一致。</p>
           <audio controls preload="metadata" src="static/official/debug_recent_input.wav"></audio>
-        </article>
-        <article class="card">
-          <h2>Funk</h2>
-          <p>保留哼唱的旋律轮廓、音符时序、乐句节奏和停顿，替换为切分鼓、深贝斯、节奏吉他、Clavinet 和铜管的器乐 Funk。</p>
-          <audio controls preload="metadata" src="static/official/debug_recent_funk.wav"></audio>
-          <details><summary>查看 Funk Prompt</summary>
-            <h3>正向 Prompt</h3>
-            <pre>Create a short, hook-first instrumental funk reinterpretation of the supplied hummed melody. Keep its recognizable melodic contour, note timing, phrase rhythm, and pauses as the central hook, but replace the voice with a lively pocket of syncopated drums, deep elastic bass, rhythmic guitar, clavinet, and tight brass accents. Make the short 5–15 second phrase feel like a polished, memorable funk idea with tasteful variation, and no vocals.</pre>
-            <h3>Negative Prompt</h3>
-            <pre>Raw humming, singing, speech, room noise, microphone hiss, clipping, silence, or the unedited recording. Do not lose the source phrase timing or replace it with an unrelated melody. Avoid a long intro, static drone, random notes, weak drums, muddy bass, harsh distortion, and excessive reverb.</pre>
-          </details>
-        </article>
-        <article class="card">
-          <h2>Lo-fi</h2>
-          <p>保留哼唱的旋律轮廓、音符时序、乐句节奏和停顿，替换为尘感鼓、电钢琴、柔和贝斯、和弦色彩和克制磁带质感的器乐 Lo-fi。</p>
-          <audio controls preload="metadata" src="static/official/debug_recent_lofi.wav"></audio>
-          <details><summary>查看 Lo-fi Prompt</summary>
-            <h3>正向 Prompt</h3>
-            <pre>Create a short, hook-first instrumental lo-fi reinterpretation of the supplied hummed melody. Keep its recognizable melodic contour, note timing, phrase rhythm, and pauses as the central hook, but replace the voice with dusty pocket drums, mellow electric piano, soft bass, gentle chord color, and restrained tape texture. Make the short 5–15 second phrase feel like a warm, memorable lo-fi idea with subtle variation, and no vocals.</pre>
-            <h3>Negative Prompt</h3>
-            <pre>Raw humming, singing, speech, room noise, microphone hiss, clipping, silence, or the unedited recording. Do not lose the source phrase timing or replace it with an unrelated melody. Avoid a long intro, static drone, random notes, a muddy mix, harsh distortion, and excessive reverb.</pre>
-          </details>
-        </article>
-        <article class="card">
-          <h2>官方 Prompt 基线</h2>
-          <p>同一段哼唱、同一套 Prosody 参数，只使用官方示例的正向 Prompt 和模型默认 Negative Prompt，不填歌词。</p>
-          <audio controls preload="metadata" src="static/official/debug_recent_official.wav"></audio>
-          <details><summary>查看官方 Prompt</summary>
-            <h3>正向 Prompt</h3>
-            <pre>An explosive, high-energy pop-rock track with a strong anime theme song feel.</pre>
-            <h3>Negative Prompt</h3>
-            <pre>pipe.default_negative_prompt（由 Worker 从官方 pipeline 读取）</pre>
-          </details>
-        </article>
+        </div>
+        <div class="meta">输入 10.48 秒<br>seed 42 · CFG 4 · 50 steps<br>固定试听快照</div>
       </section>
-      <p class="foot">页面只展示这次固定试听快照。要换输入时回到主页上传；要比较新一轮提示词，先在后端生成新的快照再更新本页。</p>
+      <section class="panel">
+        <h2>歌词对照</h2>
+        <p>本轮带歌词版本使用下面这段歌词；选择试听模式即可切换显示，不会重新等待模型。</p>
+        <textarea id="lyrics" readonly></textarea>
+        <div class="controls"><label for="mode">显示：</label><select id="mode"><option value="both">带歌词 + 不带歌词</option><option value="lyrics">只看带歌词</option><option value="instrumental">只看不带歌词</option></select></div>
+      </section>
+      <section id="styles" class="grid" aria-live="polite"></section>
+      <p id="loadState" class="foot">正在读取固定试听素材…</p>
+      <p class="foot">修改歌词文本不会触发生成；如果要测试新歌词，需要先在后端生成一组新的固定快照。</p>
     </main>
   </div>
   <script>
+    const base = /^\/hum2midi(?:\/|$)/.test(location.pathname) ? '/hum2midi' : '';
+    const api = path => `${base}${path}`;
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const stylesBox = document.querySelector('#styles');
+    const modeSelect = document.querySelector('#mode');
+    const loadState = document.querySelector('#loadState');
+    function render(data) {
+      document.querySelector('#lyrics').value = data.lyrics || '';
+      stylesBox.innerHTML = (data.styles || []).map(style => {
+        const versions = ['instrumental', 'lyrics'].map(mode => {
+          const item = style.versions[mode];
+          const title = mode === 'lyrics' ? '带歌词' : '不带歌词';
+          return `<div class="variant" data-mode="${mode}"><div class="variant-title"><span>${title}</span><span class="tag">${escapeHtml(item.elapsed_seconds)} 秒生成</span></div><audio controls preload="metadata" src="${api('/static/official/' + item.audio)}"></audio><p>${escapeHtml(item.prompt_zh)}</p><details><summary>查看英文 Prompt 和 Negative Prompt</summary><h3>Prompt</h3><pre>${escapeHtml(item.prompt)}</pre><h3>中文参考</h3><pre>${escapeHtml(item.prompt_zh)}</pre><h3>Negative Prompt</h3><pre>${escapeHtml(item.negative_prompt)}</pre><h3>中文参考</h3><pre>${escapeHtml(item.negative_zh)}</pre></details></div>`;
+        }).join('');
+        return `<article class="style-card"><h2>${escapeHtml(style.name)}</h2><p>同一段哼唱的风格化重制。</p>${versions}</article>`;
+      }).join('');
+      applyMode();
+      loadState.textContent = `固定素材已就绪：${data.styles?.length || 0} 种风格 × 2 种歌词模式。`;
+    }
+    function applyMode() {
+      document.querySelectorAll('.variant').forEach(item => { item.classList.toggle('is-hidden', modeSelect.value !== 'both' && item.dataset.mode !== modeSelect.value); });
+    }
+    modeSelect.addEventListener('change', applyMode);
+    fetch(api('/static/official/debug_snapshot.json'), {cache:'no-store'}).then(response => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); }).then(render).catch(error => { loadState.className='foot error'; loadState.textContent = `固定素材读取失败：${error.message}`; });
     if (new URLSearchParams(location.search).get('debug') === '16x9') document.body.classList.add('debug-16x9');
   </script>
 </body>
