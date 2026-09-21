@@ -3,37 +3,33 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>官方 Prosody 对照 · Hum to Music</title>
+  <title>试听对照 · Hum to Music</title>
   <style>
     :root { color-scheme: light; --ink:#17211f; --muted:#68716d; --green:#caff4d; --paper:#f6f4ef; --line:#dcded7; }
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; background:#dfe3dc; color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
-    .stage { width:min(100%,1200px); min-height:100vh; margin:auto; padding:clamp(20px,4vw,60px); background:var(--paper); }
+    .stage { width:min(100%,1100px); min-height:100vh; margin:auto; padding:clamp(20px,4vw,54px); background:var(--paper); }
     header { display:flex; justify-content:space-between; align-items:center; gap:16px; }
     .brand { font-size:14px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
     header a { color:var(--ink); text-decoration:none; border:1px solid var(--line); border-radius:999px; padding:8px 14px; font-size:12px; }
-    main { max-width:1000px; margin:8vh auto 0; }
+    main { max-width:980px; margin:8vh auto 0; }
     .eyebrow { color:#4d6d00; font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; }
-    h1 { margin:12px 0; max-width:800px; font-size:clamp(38px,6vw,72px); line-height:.98; letter-spacing:-.06em; }
-    .intro { max-width:760px; color:var(--muted); line-height:1.7; }
-    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-top:30px; }
-    .panel { padding:clamp(18px,3vw,30px); border:1px solid var(--line); border-radius:22px; background:#fffefa; }
-    .panel h2 { margin:0 0 8px; font-size:22px; }
-    .panel h3 { margin:22px 0 6px; font-size:15px; }
-    .muted { color:var(--muted); line-height:1.6; font-size:13px; }
-    .params { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 12px; margin:16px 0; color:var(--muted); font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; }
-    .params b { color:var(--ink); font-weight:600; }
-    audio { width:100%; margin-top:8px; }
-    button { border:1px solid var(--ink); border-radius:999px; padding:12px 18px; background:var(--ink); color:white; font:inherit; cursor:pointer; }
-    button:disabled { opacity:.55; cursor:wait; }
-    .status { min-height:24px; margin:14px 0; color:#4d6d00; }
-    .result { margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
-    .clip-panel { margin-top:18px; }
-    .clip-audios { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
-    .clip-audios .result { margin-top:0; }
-    pre { max-height:190px; overflow:auto; padding:12px; border-radius:12px; background:#202522; color:var(--green); white-space:pre-wrap; font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; }
-    .hidden { display:none; }
-    @media (max-width:760px) { .grid { grid-template-columns:1fr; } main { margin-top:6vh; } }
+    h1 { margin:12px 0 10px; max-width:780px; font-size:clamp(38px,6vw,72px); line-height:.98; letter-spacing:-.06em; }
+    .intro { max-width:720px; color:var(--muted); line-height:1.7; }
+    .meta { margin:24px 0 18px; color:var(--muted); font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+    .card { padding:20px; border:1px solid var(--line); border-radius:20px; background:#fffefa; }
+    .card h2 { margin:0 0 6px; font-size:21px; }
+    .card h3 { margin:18px 0 6px; font-size:13px; }
+    .card p { margin:8px 0; color:var(--muted); line-height:1.6; font-size:13px; }
+    .source { grid-column:1 / -1; background:#202522; color:#f6f4ef; border-color:#202522; }
+    .source p { color:#cbd4cc; }
+    audio { width:100%; margin-top:10px; }
+    details { margin-top:14px; border-top:1px solid var(--line); padding-top:12px; }
+    summary { cursor:pointer; color:#4d6d00; font-size:13px; font-weight:700; }
+    pre { margin:10px 0 0; white-space:pre-wrap; font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; color:var(--ink); }
+    .foot { margin-top:18px; color:var(--muted); font-size:12px; line-height:1.6; }
+    @media (max-width:760px) { main { margin-top:6vh; } .grid { grid-template-columns:1fr; } .source { grid-column:auto; } }
     @media (min-width:1000px) { body.debug-16x9 .stage { min-height:675px; aspect-ratio:16/9; } }
   </style>
 </head>
@@ -41,132 +37,55 @@
   <div class="stage">
     <header><div class="brand">Make Anything Musical</div><a href="./">返回主页</a></header>
     <main>
-      <div class="eyebrow">Official Prosody Check</div>
-      <h1>先把官方第五个样例跑明白。</h1>
-      <p class="intro">左侧是 DiffSynth-Music 官方 Input 5，官方样例本身带歌词。右侧是你最近一次真实哼唱：最上面是当前输入按官方 Prosody-only 参数重跑、且不填歌词的结果；下面的 Funk 和 Lo-fi 明确是上一次任务的输出。</p>
-      <section class="panel">
-        <h2>直接重跑最近一次哼唱</h2>
-        <p class="muted">调试阶段不用重新录音或上传。点击后会使用最近一次已完成任务保存的真实哼唱，并立即按当前代码中的 Funk/Lo-fi prompt 和负向 prompt 生成一组新结果。</p>
-        <button id="rerun">直接生成当前提示词</button>
-        <div id="rerunStatus" class="status">等待操作。</div>
-        <div id="rerunResults" class="grid"></div>
-      </section>
+      <div class="eyebrow">Fixed Listening Check</div>
+      <h1>同一段哼唱，四个结果。</h1>
+      <p class="intro">这是当前调试快照。所有音频都已提前生成，进入页面即可试听，不需要重新录音、上传或等待模型。</p>
+      <p class="meta">输入 10.48 秒 · Prosody-only · seed 42 · CFG 4 · 50 steps · 快照任务 3bd39020847e46c897f3346926f383a2</p>
       <section class="grid">
-        <article class="panel">
-          <h2>官方 Input 5</h2>
-          <p class="muted">模型仓库随附的官方 Prosody 输入和输出，不经过本项目的上传、归一化或 Control 条件。</p>
-          <h3>官方 Prosody 输入</h3>
-          <audio controls preload="metadata" src="static/official/audio_5_input.mp3"></audio>
-          <h3>官方生成输出（官方歌词）</h3>
-          <audio controls preload="metadata" src="static/official/audio_5_output.mp3"></audio>
-          <h3>官方生成输出（不填歌词）</h3>
-          <audio controls preload="metadata" src="static/official/audio_5_output_no_lyrics.wav"></audio>
-          <p class="muted">同一个官方 Input 5 输入、同一套官方参数，唯一变化是 lyrics 为空。</p>
-          <div id="officialParams" class="params"></div>
-          <p class="muted">正向 prompt：<span id="officialPrompt"></span></p>
+        <article class="card source">
+          <h2>最近一次哼唱</h2>
+          <p>同一份真实输入，下面三个结果都由它生成。</p>
+          <audio controls preload="metadata" src="static/official/debug_recent_input.wav"></audio>
         </article>
-        <article class="panel">
-          <h2>你的最近一次输入</h2>
-          <p id="userMeta" class="muted">正在读取最近一次已完成任务…</p>
-          <h3>原始哼唱（归一化后）</h3>
-          <audio id="userSource" controls preload="metadata"></audio>
-          <div class="result">
-            <h3>当前输入 · 官方参数重跑（不填歌词）</h3>
-            <p class="muted">这是你最近一次输入按官方 Prosody-only 参数重新生成的结果，不是上一次 Funk/Lo-fi 任务，也没有填入歌词。</p>
-            <audio controls preload="metadata" src="static/official/user_output_no_lyrics.wav"></audio>
-            <p class="muted">无歌词实验：seed=42 · CFG=4 · 50 steps · Prosody-only · 时长 10.48 秒</p>
-          </div>
-          <div class="result">
-            <h3>上一次任务的风格化输出</h3>
-            <p class="muted">下面的 Funk 和 Lo-fi 是之前那次任务生成的结果，使用的是任务自己的风格 prompt 和 control 参数，不是上面的官方参数复跑。</p>
-            <div id="previousResults"></div>
-          </div>
+        <article class="card">
+          <h2>Funk</h2>
+          <p>保留哼唱的旋律轮廓、音符时序、乐句节奏和停顿，替换为切分鼓、深贝斯、节奏吉他、Clavinet 和铜管的器乐 Funk。</p>
+          <audio controls preload="metadata" src="static/official/debug_recent_funk.wav"></audio>
+          <details><summary>查看 Funk Prompt</summary>
+            <h3>正向 Prompt</h3>
+            <pre>Create a short, hook-first instrumental funk reinterpretation of the supplied hummed melody. Keep its recognizable melodic contour, note timing, phrase rhythm, and pauses as the central hook, but replace the voice with a lively pocket of syncopated drums, deep elastic bass, rhythmic guitar, clavinet, and tight brass accents. Make the short 5–15 second phrase feel like a polished, memorable funk idea with tasteful variation, and no vocals.</pre>
+            <h3>Negative Prompt</h3>
+            <pre>Raw humming, singing, speech, room noise, microphone hiss, clipping, silence, or the unedited recording. Do not lose the source phrase timing or replace it with an unrelated melody. Avoid a long intro, static drone, random notes, weak drums, muddy bass, harsh distortion, and excessive reverb.</pre>
+          </details>
+        </article>
+        <article class="card">
+          <h2>Lo-fi</h2>
+          <p>保留哼唱的旋律轮廓、音符时序、乐句节奏和停顿，替换为尘感鼓、电钢琴、柔和贝斯、和弦色彩和克制磁带质感的器乐 Lo-fi。</p>
+          <audio controls preload="metadata" src="static/official/debug_recent_lofi.wav"></audio>
+          <details><summary>查看 Lo-fi Prompt</summary>
+            <h3>正向 Prompt</h3>
+            <pre>Create a short, hook-first instrumental lo-fi reinterpretation of the supplied hummed melody. Keep its recognizable melodic contour, note timing, phrase rhythm, and pauses as the central hook, but replace the voice with dusty pocket drums, mellow electric piano, soft bass, gentle chord color, and restrained tape texture. Make the short 5–15 second phrase feel like a warm, memorable lo-fi idea with subtle variation, and no vocals.</pre>
+            <h3>Negative Prompt</h3>
+            <pre>Raw humming, singing, speech, room noise, microphone hiss, clipping, silence, or the unedited recording. Do not lose the source phrase timing or replace it with an unrelated melody. Avoid a long intro, static drone, random notes, a muddy mix, harsh distortion, and excessive reverb.</pre>
+          </details>
+        </article>
+        <article class="card">
+          <h2>官方 Prompt 基线</h2>
+          <p>同一段哼唱、同一套 Prosody 参数，只使用官方示例的正向 Prompt 和模型默认 Negative Prompt，不填歌词。</p>
+          <audio controls preload="metadata" src="static/official/debug_recent_official.wav"></audio>
+          <details><summary>查看官方 Prompt</summary>
+            <h3>正向 Prompt</h3>
+            <pre>An explosive, high-energy pop-rock track with a strong anime theme song feel.</pre>
+            <h3>Negative Prompt</h3>
+            <pre>pipe.default_negative_prompt（由 Worker 从官方 pipeline 读取）</pre>
+          </details>
         </article>
       </section>
-      <section class="panel clip-panel">
-        <h2>官方 Input 5 的 25 秒片段 · 走项目转换链路</h2>
-        <p class="muted">从官方 Input 5 原音频中间截取 24.96 秒（约 101.74–126.70 秒），使用当前项目正式转换流程：Prosody-only、Funk/Lo-fi prompt、seed=42、CFG=4、50 steps，未填歌词。</p>
-        <div class="clip-audios">
-          <div class="result"><h3>片段输入</h3><audio controls preload="metadata" src="static/official/input_5_clip_25s.wav"></audio></div>
-          <div class="result"><h3>项目转换 · Funk</h3><audio controls preload="metadata" src="static/official/input_5_clip_funk.wav"></audio><p class="muted">推理约 48.7 秒，control=prosody</p></div>
-          <div class="result"><h3>项目转换 · Lo-fi</h3><audio controls preload="metadata" src="static/official/input_5_clip_lofi.wav"></audio><p class="muted">推理约 31.1 秒，control=prosody</p></div>
-        </div>
-      </section>
-      <pre id="log">官方对照页日志已启动。
-</pre>
+      <p class="foot">页面只展示这次固定试听快照。要换输入时回到主页上传；要比较新一轮提示词，先在后端生成新的快照再更新本页。</p>
     </main>
   </div>
   <script>
-    const base = /^\/hum2midi(?:\/|$)/.test(location.pathname) ? '/hum2midi' : '';
-    const api = path => `${base}${path}`;
-    const logBox = document.querySelector('#log');
-    const log = (...parts) => { logBox.textContent += `[${new Date().toLocaleTimeString()}] ${parts.join(' ')}\n`; logBox.scrollTop = logBox.scrollHeight; };
-    const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const rerun = document.querySelector('#rerun');
-    const rerunStatus = document.querySelector('#rerunStatus');
-    const rerunResults = document.querySelector('#rerunResults');
-    let latest = null;
-    async function request(path, options = {}) {
-      log('REQ', options.method || 'GET', path);
-      const response = await fetch(api(path), options);
-      const raw = await response.clone().text(); log('RESP', response.status, raw.slice(0,240));
-      if (!response.ok) throw new Error(raw || `HTTP ${response.status}`);
-      return JSON.parse(raw);
-    }
-    function renderParams(params) {
-      document.querySelector('#officialParams').innerHTML = Object.entries(params || {}).map(([k,v]) => `<div><b>${esc(k)}</b>: ${esc(v)}</div>`).join('');
-    }
-    function renderPrevious(job) {
-      latest = job;
-      const baseUrl = api('');
-      document.querySelector('#userMeta').textContent = `任务 ${job.id} · 输入 ${job.input_seconds}s · control=${job.parameters?.control || 'unknown'} · seed=${job.parameters?.seed} · CFG=${job.parameters?.cfg_scale} · steps=${job.parameters?.steps}`;
-      document.querySelector('#userSource').src = api(job.source_url);
-      const box = document.querySelector('#previousResults'); box.innerHTML = '';
-      Object.values(job.variants || {}).forEach(item => {
-        if (item.status !== 'completed') return;
-        const article = document.createElement('div'); article.className='result';
-        article.innerHTML = `<h3>${esc(item.name)}（上一次任务）</h3><audio controls preload="metadata" src="${api(item.audio_url)}"></audio><p class="muted">${esc(item.prompt)}<br>耗时 ${esc(item.elapsed_seconds)} 秒，实际 control=${esc(item.diagnostics?.control || job.parameters?.control || '')}</p>`;
-        box.appendChild(article);
-      });
-    }
-    function renderRerun(job) {
-      rerunStatus.textContent = job.message || job.status || '生成中…';
-      rerunResults.innerHTML = '';
-      Object.values(job.variants || {}).forEach(item => {
-        const article = document.createElement('article'); article.className = 'panel';
-        const audio = item.status === 'completed' ? `<audio controls preload="metadata" src="${api(item.audio_url)}"></audio>` : '';
-        const detail = item.status === 'failed' ? `生成失败：${esc(item.error || '')}` : item.status === 'completed' ? `已完成，耗时 ${esc(item.elapsed_seconds || '')} 秒` : `状态：${esc(item.status || '')}`;
-        const prompts = `<details><summary>查看本次 Prompt</summary><p class="muted"><b>正向：</b>${esc(item.prompt || '')}<br><br><b>负向：</b>${esc(item.negative_prompt || '')}</p></details>`;
-        article.innerHTML = `<h2>${esc(item.name || item.id)}</h2><p class="muted">${esc(item.translation || '')}</p>${audio}<p class="muted">${detail}</p>${prompts}`;
-        rerunResults.appendChild(article);
-      });
-    }
-    async function pollRerun(id) {
-      for (let i = 0; i < 900; i++) {
-        const job = await request(`/api/generations/${id}`);
-        renderRerun(job);
-        if (['completed', 'partial', 'failed'].includes(job.status)) return;
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      }
-      throw new Error('等待超过 15 分钟');
-    }
-    rerun.addEventListener('click', async () => {
-      rerun.disabled = true; rerunStatus.textContent = '正在使用最近一次哼唱提交…'; rerunResults.innerHTML = '';
-      try {
-        const created = await request('/api/generations/recent', {method:'POST'});
-        log('RERUN_JOB', created.id); await pollRerun(created.id);
-      } catch (error) { rerunStatus.textContent = `生成失败：${error.message}`; log('ERROR', error.message); }
-      finally { rerun.disabled = false; }
-    });
-    async function load() {
-      try {
-        const data = await request('/api/comparison/official');
-        document.querySelector('#officialPrompt').textContent = data.official.prompt;
-        renderParams(data.official.parameters); renderPrevious(data.previous);
-      } catch (error) { document.querySelector('#userMeta').textContent = `读取失败：${error.message}`; log('ERROR', error.message); }
-    }
     if (new URLSearchParams(location.search).get('debug') === '16x9') document.body.classList.add('debug-16x9');
-    load();
   </script>
 </body>
 </html>
