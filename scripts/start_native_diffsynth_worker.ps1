@@ -19,8 +19,8 @@ if ($ProfileOverride) {
 } else {
   $env:DIFFSYNTH_MEMORY_PROFILE = "official"
 }
-if (@("official", "resident_prosody") -notcontains $env:DIFFSYNTH_MEMORY_PROFILE) {
-  throw "Invalid DIFFSYNTH_MEMORY_PROFILE '$($env:DIFFSYNTH_MEMORY_PROFILE)'. Use official or resident_prosody."
+if (@("official", "resident_prosody", "resident_official") -notcontains $env:DIFFSYNTH_MEMORY_PROFILE) {
+  throw "Invalid DIFFSYNTH_MEMORY_PROFILE '$($env:DIFFSYNTH_MEMORY_PROFILE)'. Use official, resident_prosody, or resident_official."
 }
 $Venv = Join-Path $RepoRoot ".venv-diffsynth"
 $DiffSynthDir = Join-Path $RepoRoot ".vendor\DiffSynth-Studio"

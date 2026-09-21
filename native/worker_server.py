@@ -27,10 +27,12 @@ PORT = int(os.getenv("DIFFSYNTH_SERVER_PORT", "8765"))
 TOKEN = os.getenv("DIFFSYNTH_REMOTE_TOKEN", "")
 BUILD = os.getenv("H2M_WORKER_BUILD", "unknown")
 # The default stays on the official low-VRAM path.  ``resident_prosody`` is
-# an explicit A/B profile: it keeps only the Prosody template on CUDA while
-# the base models continue to use the official layer manager.  Keeping all
-# weights resident is not realistic on a 16 GB card because one template is
-# already about 8.3 GB before activations and the base model are considered.
+# explicit A/B profiles: ``resident_prosody`` keeps only the Prosody template
+# on CUDA while the base models continue to use the official layer manager;
+# ``resident_official`` disables VRAM management for the base models too,
+# matching the official basic-inference path. Keeping all weights resident is
+# not realistic on a 16 GB card because one template is already about 8.3 GB
+# before activations and the base model are considered.
 _PROFILE_FILE = Path(__file__).resolve().parents[1] / "remote" / "worker_memory_profile.txt"
 _profile_override = os.getenv("DIFFSYNTH_MEMORY_PROFILE_OVERRIDE", "").strip().lower()
 if _profile_override:
@@ -39,9 +41,9 @@ elif _PROFILE_FILE.exists():
     MEMORY_PROFILE = _PROFILE_FILE.read_text(encoding="utf-8").strip().lower() or "official"
 else:
     MEMORY_PROFILE = "official"
-if MEMORY_PROFILE not in {"official", "resident_prosody"}:
+if MEMORY_PROFILE not in {"official", "resident_prosody", "resident_official"}:
     raise RuntimeError(
-        "DIFFSYNTH_MEMORY_PROFILE must be 'official' or 'resident_prosody'"
+        "DIFFSYNTH_MEMORY_PROFILE must be 'official', 'resident_prosody', or 'resident_official'"
     )
 WORK_DIR = Path(os.getenv("NATIVE_WORKER_DIR", "runtime/native_worker_jobs"))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
@@ -120,6 +122,26 @@ def _model_configs() -> list[ModelConfig]:
     pipeline definition, even though this humming-only entry point never
     invokes ``extract_track``.
     """
+    if MEMORY_PROFILE == "resident_official":
+        # This is the official basic-inference shape: no offload fields are
+        # supplied, so ModelPool does not wrap layers and loads each model to
+        # its computation device.  It is intentionally opt-in on 16 GB GPUs.
+        resident = {
+            "computation_dtype": torch.bfloat16,
+            "computation_device": "cuda",
+        }
+        resident_fp32 = {
+            "computation_dtype": torch.float32,
+            "computation_device": "cuda",
+        }
+        return [
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="transformer/model.safetensors", **resident),
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="conditioner/model.safetensors", **resident),
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="text_encoder/model.safetensors", **resident),
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="vae/model.safetensors", **resident),
+            ModelConfig(model_id=MODEL_ID, origin_file_pattern="track_separator/model.safetensors", **resident_fp32),
+        ]
+
     disk_vram = {
         "offload_dtype": "disk",
         "offload_device": "disk",
@@ -160,7 +182,7 @@ def _model_configs() -> list[ModelConfig]:
 
 
 def _template_configs() -> list[ModelConfig]:
-    if MEMORY_PROFILE == "resident_prosody":
+    if MEMORY_PROFILE in {"resident_prosody", "resident_official"}:
         # TemplatePipeline maps model_id to the position in this list.  A
         # single eager Prosody template therefore uses model_id=0 below.
         return [ModelConfig(model_id=MODEL_ID, origin_file_pattern="template_prosody/")]
@@ -194,7 +216,7 @@ def load_models() -> None:
         # The A/B profile eagerly loads the one template used by this worker
         # and holds it in the long-lived process.  Official mode keeps all
         # templates lazy and preserves the documented low-VRAM behavior.
-        lazy_loading=MEMORY_PROFILE != "resident_prosody",
+        lazy_loading=MEMORY_PROFILE == "official",
     )
     MODEL_READY = True
     _log(
@@ -205,7 +227,7 @@ def load_models() -> None:
         compute_dtype="bfloat16",
         templates=(
             "prosody(resident)"
-            if MEMORY_PROFILE == "resident_prosody"
+            if MEMORY_PROFILE in {"resident_prosody", "resident_official"}
             else "control,prosody,reference(lazy)"
         ),
         memory_profile=MEMORY_PROFILE,
@@ -232,7 +254,7 @@ def health() -> dict[str, object]:
         "vram_limit_gb": _vram_limit_gb() if torch.cuda.is_available() else None,
         "compute_dtype": "bfloat16",
         "memory_profile": MEMORY_PROFILE,
-        "template_residency": "cuda_eager" if MEMORY_PROFILE == "resident_prosody" else "disk_lazy",
+        "template_residency": "cuda_eager" if MEMORY_PROFILE in {"resident_prosody", "resident_official"} else "disk_lazy",
         **{f"cuda_{key}": value for key, value in _cuda_memory().items()},
         "worker_busy": GENERATION_LOCK.locked(),
     }
@@ -266,8 +288,8 @@ def generate(
         raise HTTPException(401, "Invalid worker token")
     if control not in {"prosody", "control", "prosody_control"}:
         raise HTTPException(400, "Native Worker supports prosody, control, and prosody_control conditioning")
-    if MEMORY_PROFILE == "resident_prosody" and control != "prosody":
-        raise HTTPException(400, "resident_prosody profile only supports prosody conditioning")
+    if MEMORY_PROFILE in {"resident_prosody", "resident_official"} and control != "prosody":
+        raise HTTPException(400, f"{MEMORY_PROFILE} profile only supports prosody conditioning")
     if not prompt.strip():
         raise HTTPException(400, "Prompt is required")
     if not GENERATION_LOCK.acquire(blocking=False):
@@ -321,7 +343,7 @@ def generate(
             torch.cuda.synchronize()
         infer_started = time.perf_counter()
         if control == "prosody":
-            prosody_model_id = 0 if MEMORY_PROFILE == "resident_prosody" else 1
+            prosody_model_id = 0 if MEMORY_PROFILE in {"resident_prosody", "resident_official"} else 1
             template_inputs = [{"model_id": prosody_model_id, "audio": prosody}]
             negative_template_inputs = [{"model_id": prosody_model_id, "audio": prosody}]
         elif control == "control":
