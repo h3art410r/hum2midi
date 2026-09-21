@@ -1,6 +1,6 @@
 # Native DiffSynth-Music Demo
 
-这是一个手机优先的真实哼唱到风格化音乐 Demo。新入口不使用 MIDI、YIN 或旧 Stable Audio 作为中间层，直接按 DiffSynth-Music 官方 Prosody TemplatePipeline 生成完整音频。
+这是一个手机优先的真实哼唱到风格化音乐 Demo。新入口不使用 MIDI、YIN 或旧 Stable Audio 作为中间层，直接按 DiffSynth-Music 官方 TemplatePipeline 生成完整音频。主页的“官方样例对照”页还会展示官方 Input 5 的 Prosody-only 输入/输出，并用同一套参数重跑最近一次真实哼唱。
 
 ## 启动
 
@@ -12,7 +12,7 @@ $env:NATIVE_WORKER_URL = "http://192.168.9.100:8765"
 powershell -ExecutionPolicy Bypass -File scripts\start_native_backend.ps1 -Port 8000
 ```
 
-浏览器访问 `http://localhost:8000/`。电脑调试可用 `http://localhost:8000/?debug=16x9`。生产入口和 GPU Worker 的完整拓扑见 [`NATIVE_RUNTIME.md`](NATIVE_RUNTIME.md) 与 [`DEPLOY.md`](DEPLOY.md)。
+浏览器访问 `http://localhost:8000/`，官方对照页为 `http://localhost:8000/official`。电脑调试可用 `http://localhost:8000/?debug=16x9`。生产入口和 GPU Worker 的完整拓扑见 [`NATIVE_RUNTIME.md`](NATIVE_RUNTIME.md) 与 [`DEPLOY.md`](DEPLOY.md)。
 
 ## 端到端流程
 
@@ -21,7 +21,7 @@ powershell -ExecutionPolicy Bypass -File scripts\start_native_backend.ps1 -Port 
   -> 开发机规范化为 48kHz 双声道 PCM WAV
   -> GPU Worker LoadMultiTrackAudio(3840)
   -> extract_prosody（哼唱输入，不做 vocal 分离）
-  -> TemplatePipeline Prosody model_id=1
+  -> TemplatePipeline Control model_id=0 + Prosody model_id=1
   -> Funk 与 Lo-fi 两个完整 WAV
 ```
 
@@ -35,3 +35,5 @@ powershell -ExecutionPolicy Bypass -File scripts\start_native_backend.ps1 -Port 
 - `GET /api/generations/{id}/audio/funk`、`/audio/lofi`：完成后的输出 WAV。
 - `GET /api/health`：后端和 GPU Worker 健康状态。
 - `GET /api/debug/logs`：页面轮询的后端阶段日志。
+- `GET /official`：官方 Input 5 与最近任务对照页。
+- `GET/POST /api/comparison/official`：读取或启动最近一次输入的官方 Prosody-only 重跑。
