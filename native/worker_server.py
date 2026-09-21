@@ -207,6 +207,7 @@ def debug_logs(since: int = 0, limit: int = 200, request_id: str = "") -> dict[s
 def generate(
     audio: UploadFile = File(...),
     prompt: str = Form(...),
+    lyrics: str = Form(""),
     seed: int = Form(42),
     cfg_scale: float = Form(4),
     steps: int = Form(50),
@@ -223,7 +224,7 @@ def generate(
         raise HTTPException(400, "Prompt is required")
     if not GENERATION_LOCK.acquire(blocking=False):
         raise HTTPException(409, "Worker is busy; retry this generation")
-    _log("REQUEST_START", request_id, prompt_chars=len(prompt), seed=seed, cfg=cfg_scale, steps=steps)
+    _log("REQUEST_START", request_id, prompt_chars=len(prompt), lyrics_chars=len(lyrics), seed=seed, cfg=cfg_scale, steps=steps)
     input_path = WORK_DIR / f"{request_id}-input.wav"
     output_path = WORK_DIR / f"{request_id}-output.wav"
     try:
@@ -289,7 +290,7 @@ def generate(
             PIPE,
             prompt=prompt,
             negative_prompt=PIPE.default_negative_prompt,
-            lyrics="",
+            lyrics=lyrics,
             duration=duration,
             seed=seed,
             tiled=True,

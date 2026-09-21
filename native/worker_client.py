@@ -52,6 +52,7 @@ class NativeWorkerClient:
         output: Path,
         *,
         prompt: str,
+        lyrics: str = "",
         seed: int,
         cfg_scale: float,
         steps: int,
@@ -61,6 +62,7 @@ class NativeWorkerClient:
             raise WorkerError(f"Input audio not found: {source}")
         fields = {
             "prompt": prompt,
+            "lyrics": lyrics,
             "seed": str(seed),
             "cfg_scale": str(cfg_scale),
             "steps": str(steps),

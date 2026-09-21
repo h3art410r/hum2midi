@@ -19,7 +19,8 @@
     .panel { margin-top:34px; padding:clamp(18px,3vw,32px); border:1px solid var(--line); border-radius:22px; background:#fffefa; }
     .row { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
     input[type=file] { max-width:100%; }
-    button { border:1px solid var(--ink); border-radius:999px; padding:12px 20px; background:var(--ink); color:white; font:inherit; cursor:pointer; }
+    button, a.button { border:1px solid var(--ink); border-radius:999px; padding:12px 20px; background:var(--ink); color:white; font:inherit; cursor:pointer; text-decoration:none; display:inline-block; }
+    a.button.secondary { border-color:var(--line); background:transparent; color:var(--ink); }
     button.secondary { border-color:var(--line); background:transparent; color:var(--ink); }
     button:disabled { opacity:.5; cursor:wait; }
     #status { min-height:24px; margin:18px 0 10px; color:#4d6d00; }
@@ -48,6 +49,7 @@
           <input id="audio" type="file" accept=".m4a,.mp4,.wav,.mp3,.webm,.ogg,audio/*">
           <button id="submit">生成两个版本</button>
           <button id="health" class="secondary">检查 Worker</button>
+          <a class="button secondary" href="official">官方样例对照</a>
         </div>
         <div id="status" role="status" aria-live="polite">请选择 5–15 秒的哼唱文件。</div>
         <div class="progress"><i id="bar"></i></div>

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>官方 Prosody 对照 · Hum to Music</title>
+  <style>
+    :root { color-scheme: light; --ink:#17211f; --muted:#68716d; --green:#caff4d; --paper:#f6f4ef; --line:#dcded7; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:#dfe3dc; color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .stage { width:min(100%,1200px); min-height:100vh; margin:auto; padding:clamp(20px,4vw,60px); background:var(--paper); }
+    header { display:flex; justify-content:space-between; align-items:center; gap:16px; }
+    .brand { font-size:14px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    header a { color:var(--ink); text-decoration:none; border:1px solid var(--line); border-radius:999px; padding:8px 14px; font-size:12px; }
+    main { max-width:1000px; margin:8vh auto 0; }
+    .eyebrow { color:#4d6d00; font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; }
+    h1 { margin:12px 0; max-width:800px; font-size:clamp(38px,6vw,72px); line-height:.98; letter-spacing:-.06em; }
+    .intro { max-width:760px; color:var(--muted); line-height:1.7; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-top:30px; }
+    .panel { padding:clamp(18px,3vw,30px); border:1px solid var(--line); border-radius:22px; background:#fffefa; }
+    .panel h2 { margin:0 0 8px; font-size:22px; }
+    .panel h3 { margin:22px 0 6px; font-size:15px; }
+    .muted { color:var(--muted); line-height:1.6; font-size:13px; }
+    .params { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 12px; margin:16px 0; color:var(--muted); font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .params b { color:var(--ink); font-weight:600; }
+    audio { width:100%; margin-top:8px; }
+    button { border:1px solid var(--ink); border-radius:999px; padding:12px 18px; background:var(--ink); color:white; font:inherit; cursor:pointer; }
+    button:disabled { opacity:.55; cursor:wait; }
+    .status { min-height:24px; margin:14px 0; color:#4d6d00; }
+    .result { margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
+    pre { max-height:190px; overflow:auto; padding:12px; border-radius:12px; background:#202522; color:var(--green); white-space:pre-wrap; font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .hidden { display:none; }
+    @media (max-width:760px) { .grid { grid-template-columns:1fr; } main { margin-top:6vh; } }
+    @media (min-width:1000px) { body.debug-16x9 .stage { min-height:675px; aspect-ratio:16/9; } }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <header><div class="brand">Make Anything Musical</div><a href="./">返回主页</a></header>
+    <main>
+      <div class="eyebrow">Official Prosody Check</div>
+      <h1>先把官方第五个样例跑明白。</h1>
+      <p class="intro">左侧是 DiffSynth-Music 官方 Input 5：只有 Prosody 条件；右侧是你最近一次真实哼唱的结果。按钮会用官方 Input 5 的 prompt、lyrics、seed、CFG 和 50 steps，把同一段哼唱再跑一遍 Prosody-only，作为真正可比的对照。</p>
+      <section class="grid">
+        <article class="panel">
+          <h2>官方 Input 5</h2>
+          <p class="muted">模型仓库随附的官方 Prosody 输入和输出，不经过本项目的上传、归一化或 Control 条件。</p>
+          <h3>官方 Prosody 输入</h3>
+          <audio controls preload="metadata" src="static/official/audio_5_input.mp3"></audio>
+          <h3>官方生成输出</h3>
+          <audio controls preload="metadata" src="static/official/audio_5_output.mp3"></audio>
+          <div id="officialParams" class="params"></div>
+          <p class="muted">正向 prompt：<span id="officialPrompt"></span></p>
+        </article>
+        <article class="panel">
+          <h2>你的最近一次输入</h2>
+          <p id="userMeta" class="muted">正在读取最近一次已完成任务…</p>
+          <h3>原始哼唱（归一化后）</h3>
+          <audio id="userSource" controls preload="metadata"></audio>
+          <div id="previousResults"></div>
+          <div class="result">
+            <button id="rerun">按官方 Input 5 参数重跑 Prosody-only</button>
+            <div id="rerunStatus" class="status" role="status" aria-live="polite"></div>
+            <audio id="rerunAudio" class="hidden" controls preload="metadata"></audio>
+          </div>
+        </article>
+      </section>
+      <pre id="log">官方对照页日志已启动。
+</pre>
+    </main>
+  </div>
+  <script>
+    const base = /^\/hum2midi(?:\/|$)/.test(location.pathname) ? '/hum2midi' : '';
+    const api = path => `${base}${path}`;
+    const logBox = document.querySelector('#log');
+    const log = (...parts) => { logBox.textContent += `[${new Date().toLocaleTimeString()}] ${parts.join(' ')}\n`; logBox.scrollTop = logBox.scrollHeight; };
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    let latest = null;
+    async function request(path, options = {}) {
+      log('REQ', options.method || 'GET', path);
+      const response = await fetch(api(path), options);
+      const raw = await response.clone().text(); log('RESP', response.status, raw.slice(0,240));
+      if (!response.ok) throw new Error(raw || `HTTP ${response.status}`);
+      return JSON.parse(raw);
+    }
+    function renderParams(params) {
+      document.querySelector('#officialParams').innerHTML = Object.entries(params || {}).map(([k,v]) => `<div><b>${esc(k)}</b>: ${esc(v)}</div>`).join('');
+    }
+    function renderPrevious(job) {
+      latest = job;
+      const baseUrl = api('');
+      document.querySelector('#userMeta').textContent = `任务 ${job.id} · 输入 ${job.input_seconds}s · control=${job.parameters?.control || 'unknown'} · seed=${job.parameters?.seed} · CFG=${job.parameters?.cfg_scale} · steps=${job.parameters?.steps}`;
+      document.querySelector('#userSource').src = api(job.source_url);
+      const box = document.querySelector('#previousResults'); box.innerHTML = '';
+      Object.values(job.variants || {}).forEach(item => {
+        if (item.status !== 'completed') return;
+        const article = document.createElement('div'); article.className='result';
+        article.innerHTML = `<h3>${esc(item.name)}（上一次任务）</h3><audio controls preload="metadata" src="${api(item.audio_url)}"></audio><p class="muted">${esc(item.prompt)}<br>耗时 ${esc(item.elapsed_seconds)} 秒，实际 control=${esc(item.diagnostics?.control || job.parameters?.control || '')}</p>`;
+        box.appendChild(article);
+      });
+    }
+    async function load() {
+      try {
+        const data = await request('/api/comparison/official');
+        document.querySelector('#officialPrompt').textContent = data.official.prompt;
+        renderParams(data.official.parameters); renderPrevious(data.previous);
+        if (data.official_reproduction?.status === 'completed') showRerun(data.official_reproduction);
+        else if (data.official_reproduction?.status === 'running' || data.official_reproduction?.status === 'queued') pollRerun();
+      } catch (error) { document.querySelector('#userMeta').textContent = `读取失败：${error.message}`; log('ERROR', error.message); }
+    }
+    function showRerun(state) {
+      const audio = document.querySelector('#rerunAudio'); audio.classList.remove('hidden'); audio.src = api(state.audio_url); document.querySelector('#rerunStatus').textContent = `官方 Prosody-only 已完成，耗时 ${state.elapsed_seconds || ''} 秒。`;
+      document.querySelector('#rerun').disabled = false;
+    }
+    async function pollRerun() {
+      document.querySelector('#rerun').disabled = true;
+      for (let i=0;i<240;i++) {
+        const data = await request('/api/comparison/official'); const state = data.official_reproduction || {};
+        document.querySelector('#rerunStatus').textContent = `官方 Prosody-only 正在运行：${state.status || 'queued'}…`;
+        if (state.status === 'completed') { showRerun(state); return; }
+        if (state.status === 'failed') throw new Error(state.error || '官方对照生成失败');
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      throw new Error('官方对照等待超时');
+    }
+    document.querySelector('#rerun').addEventListener('click', async () => {
+      try { document.querySelector('#rerunStatus').textContent='正在提交官方 Prosody-only 对照…'; const state=await request('/api/comparison/official',{method:'POST'}); log('JOB',state.job_id); await pollRerun(); }
+      catch(error){ document.querySelector('#rerunStatus').textContent=`失败：${error.message}`; document.querySelector('#rerun').disabled=false; log('ERROR',error.message); }
+    });
+    if (new URLSearchParams(location.search).get('debug') === '16x9') document.body.classList.add('debug-16x9');
+    load();
+  </script>
+</body>
+</html>

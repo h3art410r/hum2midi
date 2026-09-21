@@ -27,6 +27,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .prompts import STYLE_ORDER, style_snapshot
+from .official_demo import OFFICIAL_LYRICS, OFFICIAL_PARAMS, OFFICIAL_PROMPT
 from .worker_client import NativeWorkerClient, WorkerError
 
 
@@ -50,6 +51,8 @@ TASKS: dict[str, asyncio.Task[None]] = {}
 GENERATION_LOCK = asyncio.Lock()
 LOGS: list[dict[str, Any]] = []
 LOG_SEQ = 0
+OFFICIAL_TASK: asyncio.Task[None] | None = None
+OFFICIAL_STATE: dict[str, Any] = {"status": "idle"}
 
 
 def _log(message: str, *, job_id: str | None = None, level: str = "INFO") -> None:
@@ -97,6 +100,11 @@ async def home() -> FileResponse:
     return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-store"})
 
 
+@app.get("/official", response_class=HTMLResponse)
+async def official_page() -> FileResponse:
+    return FileResponse(STATIC / "official.html", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
     worker = NativeWorkerClient()
@@ -128,6 +136,68 @@ async def prompt_presets() -> dict[str, Any]:
         ],
         "parameters": {"seed": SEED, "cfg_scale": CFG_SCALE, "steps": STEPS, "control": CONTROL},
     }
+
+
+@app.get("/api/comparison/official")
+async def official_comparison() -> dict[str, Any]:
+    """Return the built-in Input 5 sample and the newest completed user job."""
+    job = _latest_completed_job()
+    if not job:
+        raise HTTPException(404, "No completed user generation is available yet")
+    comparison_path = DATA / str(job["id"]) / "official-prosody.json"
+    comparison = dict(OFFICIAL_STATE)
+    if comparison_path.is_file():
+        try:
+            saved = json.loads(comparison_path.read_text(encoding="utf-8"))
+            if isinstance(saved, dict):
+                comparison = saved
+        except (OSError, json.JSONDecodeError):
+            pass
+    if OFFICIAL_TASK is not None and not OFFICIAL_TASK.done() and comparison.get("job_id") == job["id"]:
+        comparison["status"] = "running"
+    previous = _job_public(job)
+    return {
+        "status": comparison.get("status", "idle"),
+        "official": {
+            "input_url": "/static/official/audio_5_input.mp3",
+            "output_url": "/static/official/audio_5_output.mp3",
+            "prompt": OFFICIAL_PROMPT,
+            "lyrics": OFFICIAL_LYRICS,
+            "parameters": OFFICIAL_PARAMS,
+            "source": "DiffSynth-Music official Input 5 Prosody example",
+        },
+        "previous": previous,
+        "official_reproduction": comparison,
+    }
+
+
+@app.post("/api/comparison/official", status_code=202)
+async def start_official_comparison() -> JSONResponse:
+    global OFFICIAL_TASK, OFFICIAL_STATE
+    job = _latest_completed_job()
+    if not job:
+        raise HTTPException(404, "No completed user generation is available yet")
+    if OFFICIAL_TASK is not None and not OFFICIAL_TASK.done():
+        return JSONResponse({"status": "running", "job_id": job["id"]}, status_code=202)
+    output = DATA / str(job["id"]) / "official-prosody.wav"
+    if output.is_file():
+        OFFICIAL_STATE = {
+            "status": "completed",
+            "job_id": job["id"],
+            "audio_url": f"/api/comparison/official/audio/{job['id']}",
+        }
+        return JSONResponse(OFFICIAL_STATE, status_code=200)
+    OFFICIAL_STATE = {"status": "queued", "job_id": job["id"]}
+    OFFICIAL_TASK = asyncio.create_task(_run_official_comparison(job))
+    return JSONResponse(OFFICIAL_STATE, status_code=202)
+
+
+@app.get("/api/comparison/official/audio/{job_id}")
+async def official_comparison_audio(job_id: str) -> FileResponse:
+    path = DATA / job_id / "official-prosody.wav"
+    if not path.is_file() or not path.is_relative_to(DATA):
+        raise HTTPException(404, "Official reproduction is not ready")
+    return FileResponse(path, media_type="audio/wav", filename="official-prosody.wav")
 
 
 @app.post("/api/generations", status_code=202)
@@ -209,6 +279,70 @@ async def get_audio(job_id: str, variant_id: str) -> FileResponse:
     if variant.get("status") != "completed" or not path.is_file():
         raise HTTPException(404, "Audio is not ready")
     return FileResponse(path, media_type="audio/wav", filename=f"{variant_id}.wav")
+
+
+def _latest_completed_job() -> dict[str, Any] | None:
+    candidates: list[dict[str, Any]] = []
+    for manifest in DATA.glob("*/request.json"):
+        try:
+            job = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(job, dict):
+            continue
+        variants = job.get("variants", {})
+        if not isinstance(variants, dict):
+            continue
+        if not any(item.get("status") == "completed" for item in variants.values() if isinstance(item, dict)):
+            continue
+        candidates.append(job)
+    if not candidates:
+        return None
+    latest = max(candidates, key=lambda item: str(item.get("finished_at", item.get("created_at", ""))))
+    JOBS[str(latest["id"])] = latest
+    return latest
+
+
+async def _run_official_comparison(job: dict[str, Any]) -> None:
+    global OFFICIAL_TASK, OFFICIAL_STATE
+    job_id = str(job["id"])
+    output = DATA / job_id / "official-prosody.wav"
+    started = time.perf_counter()
+    async with GENERATION_LOCK:
+        OFFICIAL_STATE = {"status": "running", "job_id": job_id}
+        _log("official Input 5 reproduction started", job_id=job_id)
+        try:
+            diagnostics = await asyncio.to_thread(
+                NativeWorkerClient().generate,
+                Path(str(job["source_path"])),
+                output,
+                prompt=OFFICIAL_PROMPT,
+                lyrics=OFFICIAL_LYRICS,
+                seed=int(OFFICIAL_PARAMS["seed"]),
+                cfg_scale=float(OFFICIAL_PARAMS["cfg_scale"]),
+                steps=int(OFFICIAL_PARAMS["steps"]),
+                control="prosody",
+            )
+            OFFICIAL_STATE = {
+                "status": "completed",
+                "job_id": job_id,
+                "elapsed_seconds": round(time.perf_counter() - started, 3),
+                "audio_url": f"/api/comparison/official/audio/{job_id}",
+                "diagnostics": diagnostics,
+                "parameters": OFFICIAL_PARAMS,
+            }
+            (DATA / job_id / "official-prosody.json").write_text(
+                json.dumps(OFFICIAL_STATE, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            _log(
+                f"official Input 5 reproduction completed elapsed={OFFICIAL_STATE['elapsed_seconds']}s",
+                job_id=job_id,
+            )
+        except Exception as exc:
+            OFFICIAL_STATE = {"status": "failed", "job_id": job_id, "error": str(exc)}
+            _log(f"official Input 5 reproduction failed: {exc}", job_id=job_id, level="ERROR")
+        finally:
+            OFFICIAL_TASK = None
 
 
 async def _run_generation(job_id: str) -> None:
