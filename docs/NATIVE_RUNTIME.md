@@ -70,4 +70,4 @@ http://192.168.9.100:8765/debug/logs?limit=200
 
 ## 当前边界
 
-当前默认启用官方 Prosody + Control 联合条件，Funk 和 Lo-fi 顺序运行以适应 16GB 显存。Worker 仍保留 `control=prosody` 与 `control=control` 两个 A/B 模式；联合模式单次 10 秒输入的实测峰值约 15.9 GiB，已经接近 16GB 上限，若显存不足可通过 `NATIVE_CONTROL=prosody` 回退。没有引入自定义采样、KV cache 拼接或 offload 逻辑；联合 KV memory 由官方 `TemplatePipeline` 完成。
+当前正式链路默认只启用官方 Prosody-only 条件，Funk 和 Lo-fi 顺序运行以适应 16GB 显存。Worker 仍保留 `control=control` 与 `control=prosody_control` 作为显式 A/B 模式；联合模式单次 10 秒输入的实测峰值约 15.9 GiB，接近 16GB 上限，不能作为默认链路。没有引入自定义采样、KV cache 拼接或 offload 逻辑；条件 KV memory 由官方 `TemplatePipeline` 完成。

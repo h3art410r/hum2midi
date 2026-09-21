@@ -56,7 +56,7 @@ class NativeWorkerClient:
         seed: int,
         cfg_scale: float,
         steps: int,
-        control: str = "prosody_control",
+        control: str = "prosody",
     ) -> dict[str, object]:
         if not source.is_file():
             raise WorkerError(f"Input audio not found: {source}")

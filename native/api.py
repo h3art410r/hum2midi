@@ -42,7 +42,7 @@ MAX_UPLOAD = max(1, int(os.getenv("NATIVE_MAX_UPLOAD_MB", "20"))) * 1024 * 1024
 SEED = int(os.getenv("NATIVE_SEED", "42"))
 CFG_SCALE = float(os.getenv("NATIVE_CFG_SCALE", "4"))
 STEPS = max(1, int(os.getenv("NATIVE_STEPS", "50")))
-CONTROL = os.getenv("NATIVE_CONTROL", "prosody_control")
+CONTROL = os.getenv("NATIVE_CONTROL", "prosody")
 
 app = FastAPI(title="Hum2Midi Native Demo")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

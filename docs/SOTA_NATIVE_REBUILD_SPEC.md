@@ -49,7 +49,7 @@
 
 模型调用必须使用官方 `TemplatePipeline` 和官方 Prosody template（`model_id=1`），不改写模型 forward，不加入自定义 MIDI、YIN、重绘锚点或额外伴奏混音。官方示例参数作为新版本的初始基线：`tiled=True`、`cfg_scale=4`、`num_inference_steps=50`、固定 `seed=42`，生成时长取实际 prosody 条件长度。
 
-第一阶段先用 Prosody-only 建立基线；实测确认联合条件可运行后，当前默认改为官方 Prosody + Control。Control、Reference 和联合条件仍通过 Worker 的 `control` 参数保留为可复现 A/B，不允许引入自定义采样逻辑。
+正式链路只用 Prosody-only 建立基线。Control、Reference 和 Prosody + Control 联合条件仍通过 Worker 的 `control` 参数保留为显式 A/B，不进入默认链路，也不允许引入自定义采样逻辑。
 
 模型权重只部署在独立 GPU Worker，第一阶段目标机器是 RTX 5060 Ti 16GB；FastAPI 后端不加载模型，只通过清晰的 HTTP 模型适配接口调用 Worker。模型版本、权重来源和 Git 构建版本必须写入每个任务的诊断信息。
 

@@ -181,7 +181,7 @@ def health() -> dict[str, object]:
     return {
         "status": "ok" if MODEL_READY else "starting",
         "provider": "DiffSynth-Music",
-        "control": os.getenv("NATIVE_DEFAULT_CONTROL", "prosody_control"),
+        "control": os.getenv("NATIVE_DEFAULT_CONTROL", "prosody"),
         "supported_controls": ["prosody", "control", "prosody_control"],
         "execution": "official_prosody_quick_start",
         "model_id": MODEL_ID,
