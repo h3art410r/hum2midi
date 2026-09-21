@@ -31,7 +31,14 @@ BUILD = os.getenv("H2M_WORKER_BUILD", "unknown")
 # the base models continue to use the official layer manager.  Keeping all
 # weights resident is not realistic on a 16 GB card because one template is
 # already about 8.3 GB before activations and the base model are considered.
-MEMORY_PROFILE = os.getenv("DIFFSYNTH_MEMORY_PROFILE", "official").strip().lower()
+_PROFILE_FILE = Path(__file__).resolve().parents[1] / "remote" / "worker_memory_profile.txt"
+_profile_override = os.getenv("DIFFSYNTH_MEMORY_PROFILE_OVERRIDE", "").strip().lower()
+if _profile_override:
+    MEMORY_PROFILE = _profile_override
+elif _PROFILE_FILE.exists():
+    MEMORY_PROFILE = _PROFILE_FILE.read_text(encoding="utf-8").strip().lower() or "official"
+else:
+    MEMORY_PROFILE = "official"
 if MEMORY_PROFILE not in {"official", "resident_prosody"}:
     raise RuntimeError(
         "DIFFSYNTH_MEMORY_PROFILE must be 'official' or 'resident_prosody'"
