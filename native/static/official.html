@@ -23,15 +23,11 @@
     .source { display:grid; grid-template-columns:minmax(0,1fr) 260px; gap:20px; align-items:center; background:#202522; color:#f6f4ef; border-color:#202522; }
     .source p, .source .meta { color:#cbd4cc; }
     audio { width:100%; margin-top:10px; }
-    textarea { width:100%; min-height:76px; resize:vertical; border:1px solid var(--line); border-radius:12px; padding:12px; color:var(--ink); background:#fff; font:14px/1.6 inherit; }
-    .controls { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; }
-    select { border:1px solid var(--line); border-radius:999px; padding:10px 14px; color:var(--ink); background:#fff; font:inherit; }
     .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:16px; }
     .style-card { min-width:0; padding:20px; border:1px solid var(--line); border-radius:20px; background:#fffefa; }
     .style-card h2 { margin:0; font-size:22px; }
     .style-card > p { color:var(--muted); font-size:13px; line-height:1.6; }
     .variant { margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
-    .variant.is-hidden { display:none; }
     .variant-title { display:flex; justify-content:space-between; gap:10px; align-items:center; font-weight:750; }
     .tag { color:#4d6d00; font-size:12px; }
     details { margin-top:12px; border-top:1px solid var(--line); padding-top:10px; }
@@ -49,24 +45,18 @@
     <main>
       <div class="eyebrow">Fixed Listening Check</div>
       <h1>同一段哼唱，四种风格。</h1>
-      <p class="intro">八个结果都已经提前生成。每种风格各有一条带歌词和一条不带歌词的版本，进入页面后直接试听，不会再次调用模型。</p>
+      <p class="intro">四个纯器乐结果都已经提前生成。它们共享同一段真实哼唱输入，进入页面后直接试听，不会再次调用模型。</p>
       <section class="panel source">
         <div>
           <h2>最近一次哼唱</h2>
-          <p>四种风格都使用下面这段真实输入，Prosody-only，输出时长与输入一致。</p>
+          <p>四种风格都使用下面这段真实输入，输出时长与输入一致。</p>
           <audio controls preload="metadata" src="static/official/debug_recent_input.wav"></audio>
         </div>
         <div class="meta">输入 10.48 秒<br>seed 42 · CFG 4 · 50 steps<br>固定试听快照</div>
       </section>
-      <section class="panel">
-        <h2>歌词对照</h2>
-        <p>本轮带歌词版本使用下面这段歌词；选择试听模式即可切换显示，不会重新等待模型。</p>
-        <textarea id="lyrics" readonly></textarea>
-        <div class="controls"><label for="mode">显示：</label><select id="mode"><option value="both">带歌词 + 不带歌词</option><option value="lyrics">只看带歌词</option><option value="instrumental">只看不带歌词</option></select></div>
-      </section>
       <section id="styles" class="grid" aria-live="polite"></section>
       <p id="loadState" class="foot">正在读取固定试听素材…</p>
-      <p class="foot">修改歌词文本不会触发生成；如果要测试新歌词，需要先在后端生成一组新的固定快照。</p>
+      <p class="foot">这页用于比较同一段哼唱在不同器乐风格下的重制效果。</p>
     </main>
   </div>
   <script>
@@ -74,25 +64,15 @@
     const api = path => `${base}${path}`;
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const stylesBox = document.querySelector('#styles');
-    const modeSelect = document.querySelector('#mode');
     const loadState = document.querySelector('#loadState');
     function render(data) {
-      document.querySelector('#lyrics').value = data.lyrics || '';
       stylesBox.innerHTML = (data.styles || []).map(style => {
-        const versions = ['instrumental', 'lyrics'].map(mode => {
-          const item = style.versions[mode];
-          const title = mode === 'lyrics' ? '带歌词' : '不带歌词';
-          return `<div class="variant" data-mode="${mode}"><div class="variant-title"><span>${title}</span><span class="tag">${escapeHtml(item.elapsed_seconds)} 秒生成</span></div><audio controls preload="metadata" src="${api('/static/official/' + item.audio)}"></audio><p>${escapeHtml(item.prompt_zh)}</p><details><summary>查看英文 Prompt 和 Negative Prompt</summary><h3>Prompt</h3><pre>${escapeHtml(item.prompt)}</pre><h3>中文参考</h3><pre>${escapeHtml(item.prompt_zh)}</pre><h3>Negative Prompt</h3><pre>${escapeHtml(item.negative_prompt)}</pre><h3>中文参考</h3><pre>${escapeHtml(item.negative_zh)}</pre></details></div>`;
-        }).join('');
-        return `<article class="style-card"><h2>${escapeHtml(style.name)}</h2><p>同一段哼唱的风格化重制。</p>${versions}</article>`;
+        const item = style.versions?.instrumental;
+        if (!item) return '';
+        return `<article class="style-card"><h2>${escapeHtml(style.name)}</h2><p>同一段哼唱的器乐风格化重制。</p><div class="variant"><div class="variant-title"><span>纯器乐</span><span class="tag">${escapeHtml(item.elapsed_seconds)} 秒生成</span></div><audio controls preload="metadata" src="${api('/static/official/' + item.audio)}"></audio><p>${escapeHtml(item.prompt_zh)}</p><details><summary>查看英文 Prompt 和 Negative Prompt</summary><h3>Prompt</h3><pre>${escapeHtml(item.prompt)}</pre><h3>中文参考</h3><pre>${escapeHtml(item.prompt_zh)}</pre><h3>Negative Prompt</h3><pre>${escapeHtml(item.negative_prompt)}</pre><h3>中文参考</h3><pre>${escapeHtml(item.negative_zh)}</pre></details></div></article>`;
       }).join('');
-      applyMode();
-      loadState.textContent = `固定素材已就绪：${data.styles?.length || 0} 种风格 × 2 种歌词模式。`;
+      loadState.textContent = `固定素材已就绪：${data.styles?.length || 0} 种纯器乐风格。`;
     }
-    function applyMode() {
-      document.querySelectorAll('.variant').forEach(item => { item.classList.toggle('is-hidden', modeSelect.value !== 'both' && item.dataset.mode !== modeSelect.value); });
-    }
-    modeSelect.addEventListener('change', applyMode);
     fetch(api('/static/official/debug_snapshot.json'), {cache:'no-store'}).then(response => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); }).then(render).catch(error => { loadState.className='foot error'; loadState.textContent = `固定素材读取失败：${error.message}`; });
     if (new URLSearchParams(location.search).get('debug') === '16x9') document.body.classList.add('debug-16x9');
   </script>

@@ -1,7 +1,6 @@
 {
   "source": "debug_recent_input.wav",
   "input_seconds": 10.48,
-  "lyrics": "一闪一闪亮晶晶，满天都是小星星",
   "parameters": {
     "control": "prosody",
     "seed": 42,
@@ -17,25 +16,25 @@
         "instrumental": {
           "label": "不带歌词",
           "audio": "debug_recent_funk_instrumental.wav",
-          "prompt": "Start immediately at 0:00 with the supplied hummed melody. Use the first beat for the recognizable phrase and the full short phrase; no intro, prelude, pickup, ambient lead-in, or empty opening. Create a short, hook-first instrumental funk reinterpretation of the supplied hummed melody. Follow the source notes in the same order and at the same time positions, preserving its melodic contour, phrase rhythm, pauses, and phrase length as the central hook, but replace the voice with a lively pocket of syncopated drums, deep elastic bass, rhythmic guitar, clavinet, and tight brass accents. Use the entire 5–15 second phrase feel like a polished, memorable funk idea with tasteful variation, and no vocals.",
-          "prompt_zh": "从 0:00 立即进入主旋律，不安排前奏、铺垫或空白开头；把输入的哼唱旋律做成一段短小、先出钩子的器乐 Funk。按原始哼唱的音符顺序和进入时间逐句对齐，保留可辨认的旋律轮廓、乐句节奏、停顿和乐句长度，把人声替换成切分鼓、弹性深贝斯、节奏吉他、Clavinet 和紧凑铜管；让 5–15 秒片段像一段有记忆点、带适度变化的完整 Funk 乐句，不要人声。",
-          "negative_prompt": "No intro, prelude, pickup, ambient lead-in, empty opening, or delayed melody. Raw humming, singing, speech, room noise, microphone hiss, clipping, or the unedited recording. Do not invent a new topline, change the source note order, move phrase onsets, stretch or compress the phrase, or add notes during its rests. Do not replace it with an unrelated melody. static drone, random notes, weak drums, muddy bass, harsh distortion, and excessive reverb.",
-          "negative_zh": "避免前奏、铺垫、弱起、环境引入、空白开头或延迟进入主旋律；避免保留原始哼唱、歌声、说话声、房间声、麦克风嘶声、削波、长时间静音或未经处理的录音；不要另写新的主旋律、改变音符顺序、挪动乐句起点、拉伸或压缩乐句，也不要在原始停顿中添加音符；避免冗长前奏、静态持续音、随机音符、无力鼓组、浑浊贝斯、刺耳失真和过量混响.",
+          "prompt": "Start immediately at 0:00 with the supplied hummed melody; use the full short phrase and do not spend time on an intro, prelude, pickup, or ambient lead-in. Create a short, hook-first instrumental funk reinterpretation of that melody. Make the supplied humming the continuous, foreground lead hook from the first note to the last: closely follow its pitch contour, note order, note entrances, beat placement, pulse, phrase rhythm, accents, pauses, and full phrase duration. Build the groove, harmony, fills, and variations around that recognizably transformed hook; enhance it, but never abandon it after the opening or substitute a different lead melody. Replace the voice with a lively pocket of syncopated drums, deep elastic bass, rhythmic guitar, clavinet, and tight brass accents. Make the entire 5–15 second phrase feel like a polished, memorable funk idea with no vocals.",
+          "prompt_zh": "从 0:00 立即进入输入的哼唱旋律，不要花时间做前奏、铺垫、弱起或环境引入；用完整短乐句做器乐 Funk 改编。让哼唱从第一个音到最后一个音始终作为前景主钩子，紧密遵循原始音高走向、音符顺序、起音、拍点落位、脉冲、乐句节奏、重音、停顿和总时长；所有律动、和声、加花和变化都围绕这条可辨认的改编旋律展开，不能只在开头引用后就换成另一条主旋律。用切分鼓、弹性深贝斯、节奏吉他、Clavinet 和紧凑铜管替换人声，做成有记忆点的完整 Funk 片段，不要人声。",
+          "negative_prompt": "Raw humming, singing, speech, room noise, microphone hiss, clipping, or the unedited recording. No intro, prelude, pickup, ambient lead-in, empty opening, or delayed melody. An unrelated replacement lead melody, a lead that quotes the source only at the opening and then drifts away, new lead notes over source rests, changed note order, altered phrase entrances, displaced beats, changed pulse or accents, altered phrase rhythm, missing pauses, or stretched or compressed phrase duration. Avoid static drone, random notes, weak drums, muddy bass, harsh distortion, and excessive reverb.",
+          "negative_zh": "避免保留原始哼唱、歌声、说话声、房间声、麦克风嘶声、削波或未经处理的录音；不要出现前奏、铺垫、弱起、环境引入、空白开头或延迟进入主旋律；避免无关或替代性的主旋律、只在开头引用后便漂移的旋律、在原始停顿上叠加新的主音、改变音符顺序或乐句起点、挪动拍点、改变脉冲或重音、改写乐句节奏、漏掉停顿或拉伸/压缩整体乐句时长；避免静态持续音、随机音符、无力鼓组、浑浊贝斯、刺耳失真和过量混响。",
           "lyrics": "",
-          "elapsed_seconds": 46.001,
+          "elapsed_seconds": 45.925,
           "diagnostics": {
             "worker_url": "http://192.168.9.100:8765",
-            "worker_request_id": "7f7c96e41907",
-            "worker_request_seconds": "45.723",
+            "worker_request_id": "3f03feab5c6b",
+            "worker_request_seconds": 45.925,
             "worker_logs": [
               {
                 "seq": 3,
-                "time": "00:38:28",
+                "time": "01:05:37",
                 "event": "REQUEST_START",
-                "request_id": "7f7c96e41907",
+                "request_id": "3f03feab5c6b",
                 "fields": {
-                  "prompt_chars": "706",
-                  "negative_prompt_chars": "451",
+                  "prompt_chars": "879",
+                  "negative_prompt_chars": "587",
                   "negative_prompt_source": "request",
                   "lyrics_chars": "0",
                   "seed": "42",
@@ -45,9 +44,9 @@
               },
               {
                 "seq": 4,
-                "time": "00:38:28",
+                "time": "01:05:37",
                 "event": "INPUT_SAVED",
-                "request_id": "7f7c96e41907",
+                "request_id": "3f03feab5c6b",
                 "fields": {
                   "bytes": "2019116",
                   "filename": "debug_recent_input.wav"
@@ -55,9 +54,9 @@
               },
               {
                 "seq": 5,
-                "time": "00:38:28",
+                "time": "01:05:37",
                 "event": "TORCHCODEC_UNAVAILABLE",
-                "request_id": "7f7c96e41907",
+                "request_id": "3f03feab5c6b",
                 "fields": {
                   "fallback": "soundfile",
                   "error": "TorchCodec is required for load_with_torchcodec. Please install torchcodec to use this function."
@@ -65,22 +64,22 @@
               },
               {
                 "seq": 6,
-                "time": "00:38:29",
+                "time": "01:05:39",
                 "event": "CONDITIONS_READY",
-                "request_id": "7f7c96e41907",
+                "request_id": "3f03feab5c6b",
                 "fields": {
                   "control": "prosody",
                   "waveform_shape": "(2, 503040)",
                   "prosody_shape": "(2, 503040)",
                   "duration": "10.480s",
-                  "elapsed": "1.687s"
+                  "elapsed": "1.790s"
                 }
               },
               {
                 "seq": 7,
-                "time": "00:38:29",
+                "time": "01:05:39",
                 "event": "MODEL_INFER_START",
-                "request_id": "7f7c96e41907",
+                "request_id": "3f03feab5c6b",
                 "fields": {
                   "execution": "official_template_pipeline",
                   "control": "prosody",
@@ -90,11 +89,11 @@
               },
               {
                 "seq": 8,
-                "time": "00:39:13",
+                "time": "01:06:23",
                 "event": "MODEL_INFER_DONE",
-                "request_id": "7f7c96e41907",
+                "request_id": "3f03feab5c6b",
                 "fields": {
-                  "elapsed": "44.022s",
+                  "elapsed": "43.962s",
                   "result_shape": "(2, 503040)",
                   "peak_allocated_gb": "8.717",
                   "peak_reserved_gb": "8.924"
@@ -102,133 +101,24 @@
               },
               {
                 "seq": 9,
-                "time": "00:39:13",
+                "time": "01:06:23",
                 "event": "AUDIO_SAVE_DONE",
-                "request_id": "7f7c96e41907",
+                "request_id": "3f03feab5c6b",
                 "fields": {
-                  "elapsed": "0.010s",
-                  "total": "45.723s",
+                  "elapsed": "0.009s",
+                  "total": "45.765s",
                   "cuda_allocated_gb": "0.013",
-                  "cuda_reserved_gb": "0.170",
-                  "cuda_free_gb": "14.605"
+                  "cuda_reserved_gb": "0.189",
+                  "cuda_free_gb": "14.586"
                 }
               }
             ],
-            "conditioning_seconds": "1.687",
-            "inference_seconds": "44.022",
-            "save_seconds": "0.010",
+            "conditioning_seconds": "1.790",
+            "inference_seconds": "43.962",
+            "save_seconds": "0.009",
+            "total_seconds": "45.765",
             "peak_allocated_gb": "8.717",
             "peak_reserved_gb": "8.924",
-            "model_version": "DiffSynth-Studio/DiffSynth-Music",
-            "negative_prompt_source": "request",
-            "control": "prosody"
-          }
-        },
-        "lyrics": {
-          "label": "带歌词",
-          "audio": "debug_recent_funk_lyrics.wav",
-          "prompt": "Start immediately at 0:00 with the supplied hummed melody. Use the first beat for the recognizable phrase and the full short phrase; no intro, prelude, pickup, ambient lead-in, or empty opening. Create a short, hook-first vocal funk reinterpretation of the supplied hummed melody. Follow the source notes in the same order and at the same time positions, preserving its melodic contour, phrase rhythm, pauses, and phrase length as the central hook. Replace the raw humming with an expressive lead vocal singing the supplied lyrics clearly, backed by syncopated drums, deep elastic bass, rhythmic guitar, clavinet, and tight brass accents. Use the entire 5–15 second phrase feel polished, lively, and memorable.",
-          "prompt_zh": "从 0:00 立即进入主旋律，不安排前奏、铺垫或空白开头；把输入的哼唱旋律做成一段短小、先出钩子的演唱 Funk。按原始哼唱的音符顺序和进入时间逐句对齐，保留可辨认的旋律轮廓、乐句节奏、停顿和乐句长度，用清晰有表现力的主唱演唱指定歌词，并加入切分鼓、弹性深贝斯、节奏吉他、Clavinet 和紧凑铜管；让 5–15 秒片段精炼、活泼、有记忆点。",
-          "negative_prompt": "No intro, prelude, pickup, ambient lead-in, empty opening, or delayed melody. Raw humming, speech, room noise, microphone hiss, clipping, or the unedited recording. Do not invent a new topline, change the source note order, move phrase onsets, stretch or compress the phrase, or add notes during its rests. Do not replace it with an unrelated melody. static drone, random notes, weak drums, muddy bass, harsh distortion, and excessive reverb.",
-          "negative_zh": "避免前奏、铺垫、弱起、环境引入、空白开头或延迟进入主旋律；避免原始哼唱、说话声、房间声、麦克风嘶声、削波、长时间静音或未经处理的录音；不要另写新的主旋律、改变音符顺序、挪动乐句起点、拉伸或压缩乐句，也不要在原始停顿中添加音符；避免冗长前奏、静态持续音、随机音符、无力鼓组、浑浊贝斯、刺耳失真和过量混响.",
-          "lyrics": "一闪一闪亮晶晶，满天都是小星星",
-          "elapsed_seconds": 40.473,
-          "diagnostics": {
-            "worker_url": "http://192.168.9.100:8765",
-            "worker_request_id": "64cc085e3c27",
-            "worker_request_seconds": "40.309",
-            "worker_logs": [
-              {
-                "seq": 10,
-                "time": "00:39:14",
-                "event": "REQUEST_START",
-                "request_id": "64cc085e3c27",
-                "fields": {
-                  "prompt_chars": "710",
-                  "negative_prompt_chars": "442",
-                  "negative_prompt_source": "request",
-                  "lyrics_chars": "15",
-                  "seed": "42",
-                  "cfg": "4.0",
-                  "steps": "50"
-                }
-              },
-              {
-                "seq": 11,
-                "time": "00:39:14",
-                "event": "INPUT_SAVED",
-                "request_id": "64cc085e3c27",
-                "fields": {
-                  "bytes": "2019116",
-                  "filename": "debug_recent_input.wav"
-                }
-              },
-              {
-                "seq": 12,
-                "time": "00:39:14",
-                "event": "TORCHCODEC_UNAVAILABLE",
-                "request_id": "64cc085e3c27",
-                "fields": {
-                  "fallback": "soundfile",
-                  "error": "TorchCodec is required for load_with_torchcodec. Please install torchcodec to use this function."
-                }
-              },
-              {
-                "seq": 13,
-                "time": "00:39:14",
-                "event": "CONDITIONS_READY",
-                "request_id": "64cc085e3c27",
-                "fields": {
-                  "control": "prosody",
-                  "waveform_shape": "(2, 503040)",
-                  "prosody_shape": "(2, 503040)",
-                  "duration": "10.480s",
-                  "elapsed": "0.385s"
-                }
-              },
-              {
-                "seq": 14,
-                "time": "00:39:14",
-                "event": "MODEL_INFER_START",
-                "request_id": "64cc085e3c27",
-                "fields": {
-                  "execution": "official_template_pipeline",
-                  "control": "prosody",
-                  "memory_profile": "official",
-                  "template_models": "1"
-                }
-              },
-              {
-                "seq": 15,
-                "time": "00:39:54",
-                "event": "MODEL_INFER_DONE",
-                "request_id": "64cc085e3c27",
-                "fields": {
-                  "elapsed": "39.911s",
-                  "result_shape": "(2, 503040)",
-                  "peak_allocated_gb": "8.718",
-                  "peak_reserved_gb": "8.969"
-                }
-              },
-              {
-                "seq": 16,
-                "time": "00:39:54",
-                "event": "AUDIO_SAVE_DONE",
-                "request_id": "64cc085e3c27",
-                "fields": {
-                  "elapsed": "0.010s",
-                  "total": "40.309s",
-                  "cuda_allocated_gb": "0.013",
-                  "cuda_reserved_gb": "0.172",
-                  "cuda_free_gb": "14.604"
-                }
-              }
-            ],
-            "conditioning_seconds": "0.385",
-            "inference_seconds": "39.911",
-            "save_seconds": "0.010",
-            "peak_allocated_gb": "8.718",
-            "peak_reserved_gb": "8.969",
             "model_version": "DiffSynth-Studio/DiffSynth-Music",
             "negative_prompt_source": "request",
             "control": "prosody"
@@ -243,25 +133,25 @@
         "instrumental": {
           "label": "不带歌词",
           "audio": "debug_recent_lofi_instrumental.wav",
-          "prompt": "Start immediately at 0:00 with the supplied hummed melody. Use the first beat for the recognizable phrase and the full short phrase; no intro, prelude, pickup, ambient lead-in, or empty opening. Create a short, hook-first instrumental lo-fi reinterpretation of the supplied hummed melody. Follow the source notes in the same order and at the same time positions, preserving its melodic contour, phrase rhythm, pauses, and phrase length as the central hook, but replace the voice with dusty pocket drums, mellow electric piano, soft bass, gentle chord color, and restrained tape texture. Use the entire 5–15 second phrase feel like a warm, memorable lo-fi idea with subtle variation, and no vocals.",
-          "prompt_zh": "从 0:00 立即进入主旋律，不安排前奏、铺垫或空白开头；把输入的哼唱旋律做成一段短小、先出钩子的器乐 Lo-fi。按原始哼唱的音符顺序和进入时间逐句对齐，保留可辨认的旋律轮廓、乐句节奏、停顿和乐句长度，把人声替换成带尘感的口袋鼓、柔和电钢琴、轻柔贝斯、温和和弦色彩和克制的磁带质感；让 5–15 秒片段像一段温暖、有记忆点、带细微变化的 Lo-fi 乐句，不要人声。",
-          "negative_prompt": "No intro, prelude, pickup, ambient lead-in, empty opening, or delayed melody. Raw humming, singing, speech, room noise, microphone hiss, clipping, or the unedited recording. Do not invent a new topline, change the source note order, move phrase onsets, stretch or compress the phrase, or add notes during its rests. Do not replace it with an unrelated melody. static drone, random notes, a muddy mix, harsh distortion, and excessive reverb.",
-          "negative_zh": "避免前奏、铺垫、弱起、环境引入、空白开头或延迟进入主旋律；避免保留原始哼唱、歌声、说话声、房间声、麦克风嘶声、削波、长时间静音或未经处理的录音；不要另写新的主旋律、改变音符顺序、挪动乐句起点、拉伸或压缩乐句，也不要在原始停顿中添加音符；避免冗长前奏、静态持续音、随机音符、浑浊混音、刺耳失真和过量混响.",
+          "prompt": "Start immediately at 0:00 with the supplied hummed melody; use the full short phrase and do not spend time on an intro, prelude, pickup, or ambient lead-in. Create a short, hook-first instrumental lo-fi reinterpretation of that melody. Make the supplied humming the continuous, foreground lead hook from the first note to the last: closely follow its pitch contour, note order, note entrances, beat placement, pulse, phrase rhythm, accents, pauses, and full phrase duration. Build the groove, harmony, fills, and variations around that recognizably transformed hook; enhance it, but never abandon it after the opening or substitute a different lead melody. Replace the voice with dusty pocket drums, mellow electric piano, soft bass, gentle chord color, and restrained tape texture. Make the entire 5–15 second phrase feel like a warm, memorable lo-fi idea with no vocals.",
+          "prompt_zh": "从 0:00 立即进入输入的哼唱旋律，不要花时间做前奏、铺垫、弱起或环境引入；用完整短乐句做器乐 Lo-fi 改编。让哼唱从第一个音到最后一个音始终作为前景主钩子，紧密遵循原始音高走向、音符顺序、起音、拍点落位、脉冲、乐句节奏、重音、停顿和总时长；所有律动、和声、加花和变化都围绕这条可辨认的改编旋律展开，不能只在开头引用后就换成另一条主旋律。用带尘感的口袋鼓、柔和电钢琴、轻柔贝斯、温和和弦色彩和克制磁带质感替换人声，做成温暖、有记忆点的完整 Lo-fi 片段，不要人声。",
+          "negative_prompt": "Raw humming, singing, speech, room noise, microphone hiss, clipping, or the unedited recording. No intro, prelude, pickup, ambient lead-in, empty opening, or delayed melody. An unrelated replacement lead melody, a lead that quotes the source only at the opening and then drifts away, new lead notes over source rests, changed note order, altered phrase entrances, displaced beats, changed pulse or accents, altered phrase rhythm, missing pauses, or stretched or compressed phrase duration. Avoid static drone, random notes, a muddy mix, harsh distortion, and excessive reverb.",
+          "negative_zh": "避免保留原始哼唱、歌声、说话声、房间声、麦克风嘶声、削波或未经处理的录音；不要出现前奏、铺垫、弱起、环境引入、空白开头或延迟进入主旋律；避免无关或替代性的主旋律、只在开头引用后便漂移的旋律、在原始停顿上叠加新的主音、改变音符顺序或乐句起点、挪动拍点、改变脉冲或重音、改写乐句节奏、漏掉停顿或拉伸/压缩整体乐句时长；避免静态持续音、随机音符、浑浊混音、刺耳失真和过量混响。",
           "lyrics": "",
-          "elapsed_seconds": 42.513,
+          "elapsed_seconds": 39.648,
           "diagnostics": {
             "worker_url": "http://192.168.9.100:8765",
-            "worker_request_id": "216f050373ee",
-            "worker_request_seconds": "42.367",
+            "worker_request_id": "1c3086e8c2c6",
+            "worker_request_seconds": 39.648,
             "worker_logs": [
               {
-                "seq": 17,
-                "time": "00:39:54",
+                "seq": 10,
+                "time": "01:06:23",
                 "event": "REQUEST_START",
-                "request_id": "216f050373ee",
+                "request_id": "1c3086e8c2c6",
                 "fields": {
-                  "prompt_chars": "697",
-                  "negative_prompt_chars": "440",
+                  "prompt_chars": "872",
+                  "negative_prompt_chars": "576",
                   "negative_prompt_source": "request",
                   "lyrics_chars": "0",
                   "seed": "42",
@@ -270,43 +160,43 @@
                 }
               },
               {
-                "seq": 18,
-                "time": "00:39:54",
+                "seq": 11,
+                "time": "01:06:23",
                 "event": "INPUT_SAVED",
-                "request_id": "216f050373ee",
+                "request_id": "1c3086e8c2c6",
                 "fields": {
                   "bytes": "2019116",
                   "filename": "debug_recent_input.wav"
                 }
               },
               {
-                "seq": 19,
-                "time": "00:39:54",
+                "seq": 12,
+                "time": "01:06:23",
                 "event": "TORCHCODEC_UNAVAILABLE",
-                "request_id": "216f050373ee",
+                "request_id": "1c3086e8c2c6",
                 "fields": {
                   "fallback": "soundfile",
                   "error": "TorchCodec is required for load_with_torchcodec. Please install torchcodec to use this function."
                 }
               },
               {
-                "seq": 20,
-                "time": "00:39:54",
+                "seq": 13,
+                "time": "01:06:24",
                 "event": "CONDITIONS_READY",
-                "request_id": "216f050373ee",
+                "request_id": "1c3086e8c2c6",
                 "fields": {
                   "control": "prosody",
                   "waveform_shape": "(2, 503040)",
                   "prosody_shape": "(2, 503040)",
                   "duration": "10.480s",
-                  "elapsed": "0.356s"
+                  "elapsed": "0.370s"
                 }
               },
               {
-                "seq": 21,
-                "time": "00:39:54",
+                "seq": 14,
+                "time": "01:06:24",
                 "event": "MODEL_INFER_START",
-                "request_id": "216f050373ee",
+                "request_id": "1c3086e8c2c6",
                 "fields": {
                   "execution": "official_template_pipeline",
                   "control": "prosody",
@@ -315,144 +205,35 @@
                 }
               },
               {
-                "seq": 22,
-                "time": "00:40:36",
+                "seq": 15,
+                "time": "01:07:03",
                 "event": "MODEL_INFER_DONE",
-                "request_id": "216f050373ee",
+                "request_id": "1c3086e8c2c6",
                 "fields": {
-                  "elapsed": "41.999s",
-                  "result_shape": "(2, 503040)",
-                  "peak_allocated_gb": "8.718",
-                  "peak_reserved_gb": "8.969"
-                }
-              },
-              {
-                "seq": 23,
-                "time": "00:40:36",
-                "event": "AUDIO_SAVE_DONE",
-                "request_id": "216f050373ee",
-                "fields": {
-                  "elapsed": "0.008s",
-                  "total": "42.367s",
-                  "cuda_allocated_gb": "0.013",
-                  "cuda_reserved_gb": "0.172",
-                  "cuda_free_gb": "14.604"
-                }
-              }
-            ],
-            "conditioning_seconds": "0.356",
-            "inference_seconds": "41.999",
-            "save_seconds": "0.008",
-            "peak_allocated_gb": "8.718",
-            "peak_reserved_gb": "8.969",
-            "model_version": "DiffSynth-Studio/DiffSynth-Music",
-            "negative_prompt_source": "request",
-            "control": "prosody"
-          }
-        },
-        "lyrics": {
-          "label": "带歌词",
-          "audio": "debug_recent_lofi_lyrics.wav",
-          "prompt": "Start immediately at 0:00 with the supplied hummed melody. Use the first beat for the recognizable phrase and the full short phrase; no intro, prelude, pickup, ambient lead-in, or empty opening. Create a short, hook-first vocal lo-fi reinterpretation of the supplied hummed melody. Follow the source notes in the same order and at the same time positions, preserving its melodic contour, phrase rhythm, pauses, and phrase length as the central hook. Replace the raw humming with a soft, intimate lead vocal singing the supplied lyrics clearly, backed by dusty pocket drums, mellow electric piano, soft bass, gentle chord color, and restrained tape texture. Use the entire 5–15 second phrase feel warm, polished, and memorable.",
-          "prompt_zh": "从 0:00 立即进入主旋律，不安排前奏、铺垫或空白开头；把输入的哼唱旋律做成一段短小、先出钩子的演唱 Lo-fi。按原始哼唱的音符顺序和进入时间逐句对齐，保留可辨认的旋律轮廓、乐句节奏、停顿和乐句长度，用柔和亲密的主唱演唱指定歌词，并加入带尘感的口袋鼓、柔和电钢琴、轻柔贝斯、温和和弦色彩和克制磁带质感；让 5–15 秒片段温暖、精炼、有记忆点。",
-          "negative_prompt": "No intro, prelude, pickup, ambient lead-in, empty opening, or delayed melody. Raw humming, speech, room noise, microphone hiss, clipping, or the unedited recording. Do not invent a new topline, change the source note order, move phrase onsets, stretch or compress the phrase, or add notes during its rests. Do not replace it with an unrelated melody. static drone, random notes, a muddy mix, harsh distortion, and excessive reverb.",
-          "negative_zh": "避免前奏、铺垫、弱起、环境引入、空白开头或延迟进入主旋律；避免原始哼唱、说话声、房间声、麦克风嘶声、削波、长时间静音或未经处理的录音；不要另写新的主旋律、改变音符顺序、挪动乐句起点、拉伸或压缩乐句，也不要在原始停顿中添加音符；避免冗长前奏、静态持续音、随机音符、浑浊混音、刺耳失真和过量混响.",
-          "lyrics": "一闪一闪亮晶晶，满天都是小星星",
-          "elapsed_seconds": 40.814,
-          "diagnostics": {
-            "worker_url": "http://192.168.9.100:8765",
-            "worker_request_id": "331987911bac",
-            "worker_request_seconds": "40.650",
-            "worker_logs": [
-              {
-                "seq": 24,
-                "time": "00:40:37",
-                "event": "REQUEST_START",
-                "request_id": "331987911bac",
-                "fields": {
-                  "prompt_chars": "726",
-                  "negative_prompt_chars": "431",
-                  "negative_prompt_source": "request",
-                  "lyrics_chars": "15",
-                  "seed": "42",
-                  "cfg": "4.0",
-                  "steps": "50"
-                }
-              },
-              {
-                "seq": 25,
-                "time": "00:40:37",
-                "event": "INPUT_SAVED",
-                "request_id": "331987911bac",
-                "fields": {
-                  "bytes": "2019116",
-                  "filename": "debug_recent_input.wav"
-                }
-              },
-              {
-                "seq": 26,
-                "time": "00:40:37",
-                "event": "TORCHCODEC_UNAVAILABLE",
-                "request_id": "331987911bac",
-                "fields": {
-                  "fallback": "soundfile",
-                  "error": "TorchCodec is required for load_with_torchcodec. Please install torchcodec to use this function."
-                }
-              },
-              {
-                "seq": 27,
-                "time": "00:40:37",
-                "event": "CONDITIONS_READY",
-                "request_id": "331987911bac",
-                "fields": {
-                  "control": "prosody",
-                  "waveform_shape": "(2, 503040)",
-                  "prosody_shape": "(2, 503040)",
-                  "duration": "10.480s",
-                  "elapsed": "0.377s"
-                }
-              },
-              {
-                "seq": 28,
-                "time": "00:40:37",
-                "event": "MODEL_INFER_START",
-                "request_id": "331987911bac",
-                "fields": {
-                  "execution": "official_template_pipeline",
-                  "control": "prosody",
-                  "memory_profile": "official",
-                  "template_models": "1"
-                }
-              },
-              {
-                "seq": 29,
-                "time": "00:41:17",
-                "event": "MODEL_INFER_DONE",
-                "request_id": "331987911bac",
-                "fields": {
-                  "elapsed": "40.262s",
+                  "elapsed": "39.124s",
                   "result_shape": "(2, 503040)",
                   "peak_allocated_gb": "8.718",
                   "peak_reserved_gb": "8.967"
                 }
               },
               {
-                "seq": 30,
-                "time": "00:41:17",
+                "seq": 16,
+                "time": "01:07:03",
                 "event": "AUDIO_SAVE_DONE",
-                "request_id": "331987911bac",
+                "request_id": "1c3086e8c2c6",
                 "fields": {
                   "elapsed": "0.008s",
-                  "total": "40.650s",
+                  "total": "39.506s",
                   "cuda_allocated_gb": "0.013",
                   "cuda_reserved_gb": "0.172",
                   "cuda_free_gb": "14.604"
                 }
               }
             ],
-            "conditioning_seconds": "0.377",
-            "inference_seconds": "40.262",
+            "conditioning_seconds": "0.370",
+            "inference_seconds": "39.124",
             "save_seconds": "0.008",
+            "total_seconds": "39.506",
             "peak_allocated_gb": "8.718",
             "peak_reserved_gb": "8.967",
             "model_version": "DiffSynth-Studio/DiffSynth-Music",
@@ -469,25 +250,25 @@
         "instrumental": {
           "label": "不带歌词",
           "audio": "debug_recent_dream_pop_instrumental.wav",
-          "prompt": "Start immediately at 0:00 with the supplied hummed melody. Use the first beat for the recognizable phrase and the full short phrase; no intro, prelude, pickup, ambient lead-in, or empty opening. Create a short, hook-first instrumental dream-pop reinterpretation of the supplied hummed melody. Follow the source notes in the same order and at the same time positions, preserving its melodic contour, phrase rhythm, pauses, and phrase length as the central hook, but replace the voice with shimmering guitars, soft pulsing bass, airy synths, and a restrained spacious beat. Use the entire 5–15 second phrase feel luminous, modern, and memorable, with no vocals.",
-          "prompt_zh": "从 0:00 立即进入主旋律，不安排前奏、铺垫或空白开头；把输入的哼唱旋律做成一段短小、先出钩子的器乐 Dream Pop。按原始哼唱的音符顺序和进入时间逐句对齐，保留可辨认的旋律轮廓、乐句节奏、停顿和乐句长度，把人声替换成闪烁吉他、柔和脉冲贝斯、空气感合成器和克制的空间鼓点；让 5–15 秒片段明亮、现代、有记忆点，不要人声。",
-          "negative_prompt": "No intro, prelude, pickup, ambient lead-in, empty opening, or delayed melody. Raw humming, singing, speech, room noise, microphone hiss, clipping, or the unedited recording. Do not invent a new topline, change the source note order, move phrase onsets, stretch or compress the phrase, or add notes during its rests. Do not replace it with an unrelated melody. blurred melody, static drone, random notes, harsh distortion, and excessive reverb.",
-          "negative_zh": "避免前奏、铺垫、弱起、环境引入、空白开头或延迟进入主旋律；避免保留原始哼唱、歌声、说话声、房间声、麦克风嘶声、削波、长时间静音或未经处理的录音；不要另写新的主旋律、改变音符顺序、挪动乐句起点、拉伸或压缩乐句，也不要在原始停顿中添加音符；避免冗长前奏、旋律被冲淡、静态持续音、随机音符、刺耳失真和过量混响.",
+          "prompt": "Start immediately at 0:00 with the supplied hummed melody; use the full short phrase and do not spend time on an intro, prelude, pickup, or ambient lead-in. Create a short, hook-first instrumental dream-pop reinterpretation of that melody. Make the supplied humming the continuous, foreground lead hook from the first note to the last: closely follow its pitch contour, note order, note entrances, beat placement, pulse, phrase rhythm, accents, pauses, and full phrase duration. Build the groove, harmony, fills, and variations around that recognizably transformed hook; enhance it, but never abandon it after the opening or substitute a different lead melody. Replace the voice with shimmering guitars, soft pulsing bass, airy synths, and a restrained spacious beat. Make the entire 5–15 second phrase feel luminous, modern, and memorable, with no vocals.",
+          "prompt_zh": "从 0:00 立即进入输入的哼唱旋律，不安排前奏、铺垫或空白开头；做一段短小、先出钩子的器乐 Dream Pop 改编。让哼唱从第一个音到最后一个音始终作为前景主钩子，紧密遵循原始音高走向、音符顺序、起音、拍点落位、脉冲、乐句节奏、重音、停顿和总时长；所有律动、和声、加花和变化都围绕这条可辨认的改编旋律展开，不能只在开头引用后就换成另一条主旋律。用闪烁吉他、柔和脉冲贝斯、空气感合成器和克制空间鼓点替换人声，让整段听起来明亮、现代、有记忆点，不要人声。",
+          "negative_prompt": "Raw humming, singing, speech, room noise, microphone hiss, clipping, or the unedited recording. No intro, prelude, pickup, ambient lead-in, empty opening, or delayed melody. An unrelated replacement lead melody, a lead that quotes the source only at the opening and then drifts away, new lead notes over source rests, changed note order, altered phrase entrances, displaced beats, changed pulse or accents, altered phrase rhythm, missing pauses, or stretched or compressed phrase duration. Avoid blurred melody, static drone, random notes, harsh distortion, and excessive reverb.",
+          "negative_zh": "避免保留原始哼唱、歌声、说话声、房间声、麦克风嘶声、削波或未经处理的录音；避免无关或替代性的主旋律、只在开头引用后便漂移的旋律、在原始停顿上叠加新的主音、改变音符顺序或乐句起点、挪动拍点、改变脉冲或重音、改写乐句节奏、漏掉停顿或拉伸/压缩整体乐句时长。避免模糊旋律、静态持续音、随机音符、刺耳失真和过量混响。",
           "lyrics": "",
-          "elapsed_seconds": 40.96,
+          "elapsed_seconds": 40.758,
           "diagnostics": {
             "worker_url": "http://192.168.9.100:8765",
-            "worker_request_id": "38e54f5e06e1",
-            "worker_request_seconds": "40.825",
+            "worker_request_id": "d177892efab1",
+            "worker_request_seconds": 40.758,
             "worker_logs": [
               {
-                "seq": 31,
-                "time": "00:41:17",
+                "seq": 17,
+                "time": "01:07:03",
                 "event": "REQUEST_START",
-                "request_id": "38e54f5e06e1",
+                "request_id": "d177892efab1",
                 "fields": {
-                  "prompt_chars": "659",
-                  "negative_prompt_chars": "443",
+                  "prompt_chars": "856",
+                  "negative_prompt_chars": "579",
                   "negative_prompt_source": "request",
                   "lyrics_chars": "0",
                   "seed": "42",
@@ -496,43 +277,43 @@
                 }
               },
               {
-                "seq": 32,
-                "time": "00:41:17",
+                "seq": 18,
+                "time": "01:07:03",
                 "event": "INPUT_SAVED",
-                "request_id": "38e54f5e06e1",
+                "request_id": "d177892efab1",
                 "fields": {
                   "bytes": "2019116",
                   "filename": "debug_recent_input.wav"
                 }
               },
               {
-                "seq": 33,
-                "time": "00:41:17",
+                "seq": 19,
+                "time": "01:07:03",
                 "event": "TORCHCODEC_UNAVAILABLE",
-                "request_id": "38e54f5e06e1",
+                "request_id": "d177892efab1",
                 "fields": {
                   "fallback": "soundfile",
                   "error": "TorchCodec is required for load_with_torchcodec. Please install torchcodec to use this function."
                 }
               },
               {
-                "seq": 34,
-                "time": "00:41:18",
+                "seq": 20,
+                "time": "01:07:03",
                 "event": "CONDITIONS_READY",
-                "request_id": "38e54f5e06e1",
+                "request_id": "d177892efab1",
                 "fields": {
                   "control": "prosody",
                   "waveform_shape": "(2, 503040)",
                   "prosody_shape": "(2, 503040)",
                   "duration": "10.480s",
-                  "elapsed": "0.364s"
+                  "elapsed": "0.388s"
                 }
               },
               {
-                "seq": 35,
-                "time": "00:41:18",
+                "seq": 21,
+                "time": "01:07:03",
                 "event": "MODEL_INFER_START",
-                "request_id": "38e54f5e06e1",
+                "request_id": "d177892efab1",
                 "fields": {
                   "execution": "official_template_pipeline",
                   "control": "prosody",
@@ -541,146 +322,37 @@
                 }
               },
               {
-                "seq": 36,
-                "time": "00:41:58",
+                "seq": 22,
+                "time": "01:07:43",
                 "event": "MODEL_INFER_DONE",
-                "request_id": "38e54f5e06e1",
+                "request_id": "d177892efab1",
                 "fields": {
-                  "elapsed": "40.427s",
+                  "elapsed": "40.191s",
                   "result_shape": "(2, 503040)",
                   "peak_allocated_gb": "8.718",
-                  "peak_reserved_gb": "8.969"
+                  "peak_reserved_gb": "8.967"
                 }
               },
               {
-                "seq": 37,
-                "time": "00:41:58",
+                "seq": 23,
+                "time": "01:07:44",
                 "event": "AUDIO_SAVE_DONE",
-                "request_id": "38e54f5e06e1",
+                "request_id": "d177892efab1",
                 "fields": {
-                  "elapsed": "0.030s",
-                  "total": "40.825s",
+                  "elapsed": "0.034s",
+                  "total": "40.618s",
                   "cuda_allocated_gb": "0.013",
-                  "cuda_reserved_gb": "0.176",
-                  "cuda_free_gb": "14.600"
+                  "cuda_reserved_gb": "0.174",
+                  "cuda_free_gb": "14.602"
                 }
               }
             ],
-            "conditioning_seconds": "0.364",
-            "inference_seconds": "40.427",
-            "save_seconds": "0.030",
+            "conditioning_seconds": "0.388",
+            "inference_seconds": "40.191",
+            "save_seconds": "0.034",
+            "total_seconds": "40.618",
             "peak_allocated_gb": "8.718",
-            "peak_reserved_gb": "8.969",
-            "model_version": "DiffSynth-Studio/DiffSynth-Music",
-            "negative_prompt_source": "request",
-            "control": "prosody"
-          }
-        },
-        "lyrics": {
-          "label": "带歌词",
-          "audio": "debug_recent_dream_pop_lyrics.wav",
-          "prompt": "Start immediately at 0:00 with the supplied hummed melody. Use the first beat for the recognizable phrase and the full short phrase; no intro, prelude, pickup, ambient lead-in, or empty opening. Create a short, hook-first vocal dream-pop reinterpretation of the supplied hummed melody. Follow the source notes in the same order and at the same time positions, preserving its melodic contour, phrase rhythm, pauses, and phrase length as the central hook. Replace the raw humming with an airy, expressive lead vocal singing the supplied lyrics clearly, backed by shimmering guitars, soft pulsing bass, airy synths, and a restrained spacious beat. Use the entire 5–15 second phrase feel luminous and memorable.",
-          "prompt_zh": "从 0:00 立即进入主旋律，不安排前奏、铺垫或空白开头；把输入的哼唱旋律做成一段短小、先出钩子的演唱 Dream Pop。按原始哼唱的音符顺序和进入时间逐句对齐，保留可辨认的旋律轮廓、乐句节奏、停顿和乐句长度，用空气感、富有表现力的主唱演唱指定歌词，并加入闪烁吉他、柔和脉冲贝斯、空气感合成器和克制的空间鼓点；让 5–15 秒片段明亮、有记忆点。",
-          "negative_prompt": "No intro, prelude, pickup, ambient lead-in, empty opening, or delayed melody. Raw humming, speech, room noise, microphone hiss, clipping, or the unedited recording. Do not invent a new topline, change the source note order, move phrase onsets, stretch or compress the phrase, or add notes during its rests. Do not replace it with an unrelated melody. blurred melody, static drone, random notes, harsh distortion, and excessive reverb.",
-          "negative_zh": "避免前奏、铺垫、弱起、环境引入、空白开头或延迟进入主旋律；避免原始哼唱、说话声、房间声、麦克风嘶声、削波、长时间静音或未经处理的录音；不要另写新的主旋律、改变音符顺序、挪动乐句起点、拉伸或压缩乐句，也不要在原始停顿中添加音符；避免冗长前奏、旋律被冲淡、静态持续音、随机音符、刺耳失真和过量混响.",
-          "lyrics": "一闪一闪亮晶晶，满天都是小星星",
-          "elapsed_seconds": 41.597,
-          "diagnostics": {
-            "worker_url": "http://192.168.9.100:8765",
-            "worker_request_id": "163e5abf3ecc",
-            "worker_request_seconds": "41.423",
-            "worker_logs": [
-              {
-                "seq": 38,
-                "time": "00:41:58",
-                "event": "REQUEST_START",
-                "request_id": "163e5abf3ecc",
-                "fields": {
-                  "prompt_chars": "707",
-                  "negative_prompt_chars": "434",
-                  "negative_prompt_source": "request",
-                  "lyrics_chars": "15",
-                  "seed": "42",
-                  "cfg": "4.0",
-                  "steps": "50"
-                }
-              },
-              {
-                "seq": 39,
-                "time": "00:41:58",
-                "event": "INPUT_SAVED",
-                "request_id": "163e5abf3ecc",
-                "fields": {
-                  "bytes": "2019116",
-                  "filename": "debug_recent_input.wav"
-                }
-              },
-              {
-                "seq": 40,
-                "time": "00:41:58",
-                "event": "TORCHCODEC_UNAVAILABLE",
-                "request_id": "163e5abf3ecc",
-                "fields": {
-                  "fallback": "soundfile",
-                  "error": "TorchCodec is required for load_with_torchcodec. Please install torchcodec to use this function."
-                }
-              },
-              {
-                "seq": 41,
-                "time": "00:41:59",
-                "event": "CONDITIONS_READY",
-                "request_id": "163e5abf3ecc",
-                "fields": {
-                  "control": "prosody",
-                  "waveform_shape": "(2, 503040)",
-                  "prosody_shape": "(2, 503040)",
-                  "duration": "10.480s",
-                  "elapsed": "0.401s"
-                }
-              },
-              {
-                "seq": 42,
-                "time": "00:41:59",
-                "event": "MODEL_INFER_START",
-                "request_id": "163e5abf3ecc",
-                "fields": {
-                  "execution": "official_template_pipeline",
-                  "control": "prosody",
-                  "memory_profile": "official",
-                  "template_models": "1"
-                }
-              },
-              {
-                "seq": 43,
-                "time": "00:42:40",
-                "event": "MODEL_INFER_DONE",
-                "request_id": "163e5abf3ecc",
-                "fields": {
-                  "elapsed": "41.010s",
-                  "result_shape": "(2, 503040)",
-                  "peak_allocated_gb": "8.718",
-                  "peak_reserved_gb": "8.969"
-                }
-              },
-              {
-                "seq": 44,
-                "time": "00:42:40",
-                "event": "AUDIO_SAVE_DONE",
-                "request_id": "163e5abf3ecc",
-                "fields": {
-                  "elapsed": "0.009s",
-                  "total": "41.423s",
-                  "cuda_allocated_gb": "0.013",
-                  "cuda_reserved_gb": "0.170",
-                  "cuda_free_gb": "14.605"
-                }
-              }
-            ],
-            "conditioning_seconds": "0.401",
-            "inference_seconds": "41.010",
-            "save_seconds": "0.009",
-            "peak_allocated_gb": "8.718",
-            "peak_reserved_gb": "8.969",
+            "peak_reserved_gb": "8.967",
             "model_version": "DiffSynth-Studio/DiffSynth-Music",
             "negative_prompt_source": "request",
             "control": "prosody"
@@ -695,25 +367,25 @@
         "instrumental": {
           "label": "不带歌词",
           "audio": "debug_recent_acoustic_pop_instrumental.wav",
-          "prompt": "Start immediately at 0:00 with the supplied hummed melody. Use the first beat for the recognizable phrase and the full short phrase; no intro, prelude, pickup, ambient lead-in, or empty opening. Create a short, hook-first instrumental acoustic-pop reinterpretation of the supplied hummed melody. Follow the source notes in the same order and at the same time positions, preserving its melodic contour, phrase rhythm, pauses, and phrase length as the central hook, but replace the voice with intimate acoustic guitar, warm piano, hand percussion, rounded bass, and subtle string color. Use the entire 5–15 second phrase feel clear, human, and memorable, with no vocals.",
-          "prompt_zh": "从 0:00 立即进入主旋律，不安排前奏、铺垫或空白开头；把输入的哼唱旋律做成一段短小、先出钩子的器乐 Acoustic Pop。按原始哼唱的音符顺序和进入时间逐句对齐，保留可辨认的旋律轮廓、乐句节奏、停顿和乐句长度，把人声替换成亲密木吉他、温暖钢琴、手打击乐、圆润贝斯和细微弦乐色彩；让 5–15 秒片段清晰、有人味、有记忆点，不要人声。",
-          "negative_prompt": "No intro, prelude, pickup, ambient lead-in, empty opening, or delayed melody. Raw humming, singing, speech, room noise, microphone hiss, clipping, or the unedited recording. Do not invent a new topline, change the source note order, move phrase onsets, stretch or compress the phrase, or add notes during its rests. Do not replace it with an unrelated melody. static drone, random notes, brittle guitar, muddy low end, harsh distortion, and excessive reverb.",
-          "negative_zh": "避免前奏、铺垫、弱起、环境引入、空白开头或延迟进入主旋律；避免保留原始哼唱、歌声、说话声、房间声、麦克风嘶声、削波、长时间静音或未经处理的录音；不要另写新的主旋律、改变音符顺序、挪动乐句起点、拉伸或压缩乐句，也不要在原始停顿中添加音符；避免冗长前奏、静态持续音、随机音符、尖硬吉他、浑浊低频、刺耳失真和过量混响.",
+          "prompt": "Start immediately at 0:00 with the supplied hummed melody; use the full short phrase and do not spend time on an intro, prelude, pickup, or ambient lead-in. Create a short, hook-first instrumental acoustic-pop reinterpretation of that melody. Make the supplied humming the continuous, foreground lead hook from the first note to the last: closely follow its pitch contour, note order, note entrances, beat placement, pulse, phrase rhythm, accents, pauses, and full phrase duration. Build the groove, harmony, fills, and variations around that recognizably transformed hook; enhance it, but never abandon it after the opening or substitute a different lead melody. Replace the voice with intimate acoustic guitar, warm piano, hand percussion, rounded bass, and subtle string color. Make the entire 5–15 second phrase feel clear, human, and memorable, with no vocals.",
+          "prompt_zh": "从 0:00 立即进入输入的哼唱旋律，不安排前奏、铺垫或空白开头；做一段短小、先出钩子的器乐 Acoustic Pop 改编。让哼唱从第一个音到最后一个音始终作为前景主钩子，紧密遵循原始音高走向、音符顺序、起音、拍点落位、脉冲、乐句节奏、重音、停顿和总时长；所有律动、和声、加花和变化都围绕这条可辨认的改编旋律展开，不能只在开头引用后就换成另一条主旋律。用亲密木吉他、温暖钢琴、手打击乐、圆润贝斯和细微弦乐色彩替换人声，让整段清晰、有人味、有记忆点，不要人声。",
+          "negative_prompt": "Raw humming, singing, speech, room noise, microphone hiss, clipping, or the unedited recording. No intro, prelude, pickup, ambient lead-in, empty opening, or delayed melody. An unrelated replacement lead melody, a lead that quotes the source only at the opening and then drifts away, new lead notes over source rests, changed note order, altered phrase entrances, displaced beats, changed pulse or accents, altered phrase rhythm, missing pauses, or stretched or compressed phrase duration. Avoid static drone, random notes, brittle guitar, muddy low end, harsh distortion, and excessive reverb.",
+          "negative_zh": "避免保留原始哼唱、歌声、说话声、房间声、麦克风嘶声、削波或未经处理的录音；避免无关或替代性的主旋律、只在开头引用后便漂移的旋律、在原始停顿上叠加新的主音、改变音符顺序或乐句起点、挪动拍点、改变脉冲或重音、改写乐句节奏、漏掉停顿或拉伸/压缩整体乐句时长。避免静态持续音、随机音符、尖硬吉他、浑浊低频、刺耳失真和过量混响。",
           "lyrics": "",
-          "elapsed_seconds": 40.532,
+          "elapsed_seconds": 40.015,
           "diagnostics": {
             "worker_url": "http://192.168.9.100:8765",
-            "worker_request_id": "fe2a6a2b18da",
-            "worker_request_seconds": "40.347",
+            "worker_request_id": "d3330e983d2e",
+            "worker_request_seconds": 40.015,
             "worker_logs": [
               {
-                "seq": 45,
-                "time": "00:42:40",
+                "seq": 24,
+                "time": "01:07:44",
                 "event": "REQUEST_START",
-                "request_id": "fe2a6a2b18da",
+                "request_id": "d3330e983d2e",
                 "fields": {
-                  "prompt_chars": "668",
-                  "negative_prompt_chars": "458",
+                  "prompt_chars": "865",
+                  "negative_prompt_chars": "594",
                   "negative_prompt_source": "request",
                   "lyrics_chars": "0",
                   "seed": "42",
@@ -722,43 +394,43 @@
                 }
               },
               {
-                "seq": 46,
-                "time": "00:42:40",
+                "seq": 25,
+                "time": "01:07:44",
                 "event": "INPUT_SAVED",
-                "request_id": "fe2a6a2b18da",
+                "request_id": "d3330e983d2e",
                 "fields": {
                   "bytes": "2019116",
                   "filename": "debug_recent_input.wav"
                 }
               },
               {
-                "seq": 47,
-                "time": "00:42:40",
+                "seq": 26,
+                "time": "01:07:44",
                 "event": "TORCHCODEC_UNAVAILABLE",
-                "request_id": "fe2a6a2b18da",
+                "request_id": "d3330e983d2e",
                 "fields": {
                   "fallback": "soundfile",
                   "error": "TorchCodec is required for load_with_torchcodec. Please install torchcodec to use this function."
                 }
               },
               {
-                "seq": 48,
-                "time": "00:42:40",
+                "seq": 27,
+                "time": "01:07:44",
                 "event": "CONDITIONS_READY",
-                "request_id": "fe2a6a2b18da",
+                "request_id": "d3330e983d2e",
                 "fields": {
                   "control": "prosody",
                   "waveform_shape": "(2, 503040)",
                   "prosody_shape": "(2, 503040)",
                   "duration": "10.480s",
-                  "elapsed": "0.386s"
+                  "elapsed": "0.347s"
                 }
               },
               {
-                "seq": 49,
-                "time": "00:42:40",
+                "seq": 28,
+                "time": "01:07:44",
                 "event": "MODEL_INFER_START",
-                "request_id": "fe2a6a2b18da",
+                "request_id": "d3330e983d2e",
                 "fields": {
                   "execution": "official_template_pipeline",
                   "control": "prosody",
@@ -767,144 +439,35 @@
                 }
               },
               {
-                "seq": 50,
-                "time": "00:43:20",
+                "seq": 29,
+                "time": "01:08:24",
                 "event": "MODEL_INFER_DONE",
-                "request_id": "fe2a6a2b18da",
+                "request_id": "d3330e983d2e",
                 "fields": {
-                  "elapsed": "39.947s",
-                  "result_shape": "(2, 503040)",
-                  "peak_allocated_gb": "8.718",
-                  "peak_reserved_gb": "8.969"
-                }
-              },
-              {
-                "seq": 51,
-                "time": "00:43:20",
-                "event": "AUDIO_SAVE_DONE",
-                "request_id": "fe2a6a2b18da",
-                "fields": {
-                  "elapsed": "0.009s",
-                  "total": "40.347s",
-                  "cuda_allocated_gb": "0.013",
-                  "cuda_reserved_gb": "0.174",
-                  "cuda_free_gb": "14.602"
-                }
-              }
-            ],
-            "conditioning_seconds": "0.386",
-            "inference_seconds": "39.947",
-            "save_seconds": "0.009",
-            "peak_allocated_gb": "8.718",
-            "peak_reserved_gb": "8.969",
-            "model_version": "DiffSynth-Studio/DiffSynth-Music",
-            "negative_prompt_source": "request",
-            "control": "prosody"
-          }
-        },
-        "lyrics": {
-          "label": "带歌词",
-          "audio": "debug_recent_acoustic_pop_lyrics.wav",
-          "prompt": "Start immediately at 0:00 with the supplied hummed melody. Use the first beat for the recognizable phrase and the full short phrase; no intro, prelude, pickup, ambient lead-in, or empty opening. Create a short, hook-first vocal acoustic-pop reinterpretation of the supplied hummed melody. Follow the source notes in the same order and at the same time positions, preserving its melodic contour, phrase rhythm, pauses, and phrase length as the central hook. Replace the raw humming with a clear, warm lead vocal singing the supplied lyrics, backed by intimate acoustic guitar, warm piano, hand percussion, rounded bass, and subtle string color. Use the entire 5–15 second phrase feel human, polished, and memorable.",
-          "prompt_zh": "从 0:00 立即进入主旋律，不安排前奏、铺垫或空白开头；把输入的哼唱旋律做成一段短小、先出钩子的演唱 Acoustic Pop。按原始哼唱的音符顺序和进入时间逐句对齐，保留可辨认的旋律轮廓、乐句节奏、停顿和乐句长度，用清晰温暖的主唱演唱指定歌词，并加入亲密木吉他、温暖钢琴、手打击乐、圆润贝斯和细微弦乐色彩；让 5–15 秒片段有人味、精炼、有记忆点。",
-          "negative_prompt": "No intro, prelude, pickup, ambient lead-in, empty opening, or delayed melody. Raw humming, speech, room noise, microphone hiss, clipping, or the unedited recording. Do not invent a new topline, change the source note order, move phrase onsets, stretch or compress the phrase, or add notes during its rests. Do not replace it with an unrelated melody. static drone, random notes, brittle guitar, muddy low end, harsh distortion, and excessive reverb.",
-          "negative_zh": "避免前奏、铺垫、弱起、环境引入、空白开头或延迟进入主旋律；避免原始哼唱、说话声、房间声、麦克风嘶声、削波、长时间静音或未经处理的录音；不要另写新的主旋律、改变音符顺序、挪动乐句起点、拉伸或压缩乐句，也不要在原始停顿中添加音符；避免冗长前奏、静态持续音、随机音符、尖硬吉他、浑浊低频、刺耳失真和过量混响.",
-          "lyrics": "一闪一闪亮晶晶，满天都是小星星",
-          "elapsed_seconds": 41.614,
-          "diagnostics": {
-            "worker_url": "http://192.168.9.100:8765",
-            "worker_request_id": "82be064f6592",
-            "worker_request_seconds": "41.436",
-            "worker_logs": [
-              {
-                "seq": 52,
-                "time": "00:43:20",
-                "event": "REQUEST_START",
-                "request_id": "82be064f6592",
-                "fields": {
-                  "prompt_chars": "714",
-                  "negative_prompt_chars": "449",
-                  "negative_prompt_source": "request",
-                  "lyrics_chars": "15",
-                  "seed": "42",
-                  "cfg": "4.0",
-                  "steps": "50"
-                }
-              },
-              {
-                "seq": 53,
-                "time": "00:43:20",
-                "event": "INPUT_SAVED",
-                "request_id": "82be064f6592",
-                "fields": {
-                  "bytes": "2019116",
-                  "filename": "debug_recent_input.wav"
-                }
-              },
-              {
-                "seq": 54,
-                "time": "00:43:20",
-                "event": "TORCHCODEC_UNAVAILABLE",
-                "request_id": "82be064f6592",
-                "fields": {
-                  "fallback": "soundfile",
-                  "error": "TorchCodec is required for load_with_torchcodec. Please install torchcodec to use this function."
-                }
-              },
-              {
-                "seq": 55,
-                "time": "00:43:21",
-                "event": "CONDITIONS_READY",
-                "request_id": "82be064f6592",
-                "fields": {
-                  "control": "prosody",
-                  "waveform_shape": "(2, 503040)",
-                  "prosody_shape": "(2, 503040)",
-                  "duration": "10.480s",
-                  "elapsed": "0.386s"
-                }
-              },
-              {
-                "seq": 56,
-                "time": "00:43:21",
-                "event": "MODEL_INFER_START",
-                "request_id": "82be064f6592",
-                "fields": {
-                  "execution": "official_template_pipeline",
-                  "control": "prosody",
-                  "memory_profile": "official",
-                  "template_models": "1"
-                }
-              },
-              {
-                "seq": 57,
-                "time": "00:44:02",
-                "event": "MODEL_INFER_DONE",
-                "request_id": "82be064f6592",
-                "fields": {
-                  "elapsed": "41.036s",
+                  "elapsed": "39.535s",
                   "result_shape": "(2, 503040)",
                   "peak_allocated_gb": "8.718",
                   "peak_reserved_gb": "8.967"
                 }
               },
               {
-                "seq": 58,
-                "time": "00:44:02",
+                "seq": 30,
+                "time": "01:08:24",
                 "event": "AUDIO_SAVE_DONE",
-                "request_id": "82be064f6592",
+                "request_id": "d3330e983d2e",
                 "fields": {
-                  "elapsed": "0.010s",
-                  "total": "41.436s",
+                  "elapsed": "0.008s",
+                  "total": "39.895s",
                   "cuda_allocated_gb": "0.013",
-                  "cuda_reserved_gb": "0.176",
-                  "cuda_free_gb": "14.600"
+                  "cuda_reserved_gb": "0.172",
+                  "cuda_free_gb": "14.604"
                 }
               }
             ],
-            "conditioning_seconds": "0.386",
-            "inference_seconds": "41.036",
-            "save_seconds": "0.010",
+            "conditioning_seconds": "0.347",
+            "inference_seconds": "39.535",
+            "save_seconds": "0.008",
+            "total_seconds": "39.895",
             "peak_allocated_gb": "8.718",
             "peak_reserved_gb": "8.967",
             "model_version": "DiffSynth-Studio/DiffSynth-Music",
@@ -915,5 +478,5 @@
       }
     }
   ],
-  "generated_at": "2026-09-21T16:44:04Z"
+  "generated_at": "2026-09-21T17:08:26Z"
 }
