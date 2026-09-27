@@ -218,4 +218,14 @@
 - 把正向 prompt 压缩成更开放的短描述（固定首音对齐条件、负向词、seed/CFG/steps）后，Funk/Lo-fi 起音代理升至0.3438/0.3908，但风格 CLAP 降至0.1981/0.1295，Chroma降至0.2420/0.3299；说明仅删掉编曲细节并不能取得“更有风格且保旋律”。不采纳为正式 prompt。
 - 固定当前正向词与其余参数，把自定义清理型 negative prompt 换成 `pipe.default_negative_prompt`：Funk 的起音/Chroma/CLAP从0.2930/0.2742/0.3739变为0.1952/0.4293/0.3460；Lo-fi从0.3054/0.5231/0.2142变为0.1881/0.3470/0.1389。官方默认值没有总体优势；暂时保留项目自定义 negative prompt。上述均为代理指标，不代表听觉通过。
 - 新读 DiffSynth-Music 官方 Quick Start：`model_id=1` Prosody 用同一旋律波形同时传正、负模板条件；`model_id=2` Reference 是官方音色参考条件，Quick Start 示例只传正向 `template_inputs`，负向文本为空。论文说明各模板 KV memory 可组合，但没有提供 Prosody+Reference 的固定组合示例。
-- 为直接检验“Prosody保旋律 + Reference增音色/风格”已在 Worker 增加一个显式 `prosody_reference` 实验模式及第二音频上传参数；默认/正式 API 仍只走 Prosody，不使用 Control。调试脚本用本项目先前生成的同风格输出作 Reference，先跑1步显存与协议冒烟，再决定是否运行50步 A/B；当前变更尚未提交/推送，实验结果待定。Reference 模式需要额外模板显存，若单步峰值逼近16GB即停止。
+- 为直接检验“Prosody保旋律 + Reference增音色/风格”已在 Worker 增加显式 `prosody_reference` 实验模式及第二音频上传参数，提交 `b71ffc7` 已推送并由 daemon 自动部署；默认/正式链路仍只走 Prosody。用已有 Funk 输出作 Reference 时，完整10.48秒输入的1步调用成功，总计70.139秒、峰值预留15.832GB；4.8秒和6.4秒短 Reference 均在 TemplatePipeline 内以 `ValueError: max() iterable argument is empty` 失败，未得到可试听质量结果，也没有尝试50步。失败曾使 CUDA 模型对象滞留显存，异常释放已在 `b6d66cc` 修复。该 Reference A/B 不再作为本轮候选。
+
+## 2026-09-28：Control + Prosody 风格条件实验
+
+项目负责人重新要求针对 Control + Prosody 结果做显式风格 A/B；正式链路仍保持 Prosody-only。重新核对 [DiffSynth-Music 官方 Quick Start](https://diffsynth-studio-doc.readthedocs.io/en/latest/Model_Details/DiffSynth-Music.html)：`Control` 可用于 beat/vocal/accompaniment 结构条件；官方 Accompaniment 示例先调用 `pipe.extract_track(audio, track=["drums", "bass", "other"])`，而 `Prosody` 用 `extract_prosody` 单独提供音高/时序。因此新实验保留原哼唱作为 Prosody，只从一条已有 Funk 输出中提取鼓、贝斯作为 Control；没有把提取轨混到最终输出。
+
+首次把完整 Funk 输出作为正向 Control 输入但负向分支不带 Control，结果 CLAP Funk 只有0.0386、起音相关0.1941；按官方 `extract_track` 只取鼓/贝斯后，正向独有 Control 的结果 CLAP0.1100、起音0.5816、Chroma0.4304。随后把相同鼓/贝斯 Control 放进正负两条 CFG 分支：CFG4.5 的 CLAP/起音/Chroma为0.4300/0.5484/0.3788；CFG4.0为0.4577/0.5463/0.3837。CFG4.0 AST 人声/哼唱概率0.002294/0.000217，输出10.48秒；连同约7秒鼓贝斯分离，总计87.2秒，峰值预留显存15.885GB。
+
+原来 seed7 Control+Prosody 对照的 CLAP/起音/Chroma为0.4207/0.6125/0.6274，Pitch50近似值0.4173；新 CFG4.0 在 CLAP 和频谱层次上有小幅增强、起音相关保持中等，但 Chroma/Pitch50明显下降。Pitch50、Chroma、CLAP均只是复调混音诊断代理，不能证明“用户能听出原旋律”或“更惊艳”。当前调试页仅保留 seed7 基线、官方鼓贝斯 Control CFG4.5/4.0 三条用于并排人工试听；不得把该实验自动替换正式 Prosody-only 链路。用户试听反馈后再选择下一项技术变量。
+
+为避免短 Reference 实验失败后留下懒加载 CUDA 权重，Worker 异常路径现在会释放 Pipeline 对象、执行垃圾回收与 `torch.cuda.empty_cache()`；`b6d66cc` 已推送并由 daemon 自动部署。单独 Control 音频、官方鼓/贝斯分离与正负 CFG 分支选项已在后续 Worker 实验接口中实现，相关推理分别使用 `35bc823`、`5b10b52`、`9851d85` 构建；客户端单测3项通过。此能力仍仅用于显式 A/B。
