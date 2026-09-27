@@ -58,6 +58,9 @@ class NativeWorkerClient:
         cfg_scale: float,
         steps: int,
         control: str = "prosody",
+        bpm: float | None = None,
+        keyscale: str | None = None,
+        timesignature: str | None = None,
     ) -> dict[str, object]:
         if not source.is_file():
             raise WorkerError(f"Input audio not found: {source}")
@@ -71,6 +74,12 @@ class NativeWorkerClient:
         }
         if negative_prompt:
             fields["negative_prompt"] = negative_prompt
+        if bpm is not None:
+            fields["bpm"] = str(bpm)
+        if keyscale is not None:
+            fields["keyscale"] = keyscale
+        if timesignature is not None:
+            fields["timesignature"] = timesignature
         body, content_type = _multipart(
             fields,
             "audio",
@@ -122,6 +131,9 @@ class NativeWorkerClient:
             "x-diffsynth-model-version",
             "x-diffsynth-negative-prompt-source",
             "x-diffsynth-control",
+            "x-diffsynth-bpm",
+            "x-diffsynth-keyscale",
+            "x-diffsynth-timesignature",
         ):
             if headers.get(key):
                 diagnostics[key.removeprefix("x-diffsynth-").replace("-", "_")] = headers[key]

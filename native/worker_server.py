@@ -280,6 +280,9 @@ def generate(
     cfg_scale: float = Form(4),
     steps: int = Form(50),
     control: str = Form("prosody"),
+    bpm: float | None = Form(None),
+    keyscale: str | None = Form(None),
+    timesignature: str | None = Form(None),
     authorization: str | None = Header(default=None),
 ) -> FileResponse:
     request_id = uuid.uuid4().hex[:12]
@@ -306,6 +309,9 @@ def generate(
         seed=seed,
         cfg=cfg_scale,
         steps=steps,
+        bpm=bpm if bpm is not None else "model_default",
+        keyscale=keyscale if keyscale is not None else "model_default",
+        timesignature=timesignature if timesignature is not None else "model_default",
     )
     input_path = WORK_DIR / f"{request_id}-input.wav"
     output_path = WORK_DIR / f"{request_id}-output.wav"
@@ -380,6 +386,9 @@ def generate(
             tiled=True,
             cfg_scale=cfg_scale,
             num_inference_steps=steps,
+            bpm=bpm,
+            keyscale=keyscale,
+            timesignature=timesignature,
             template_inputs=template_inputs,
             negative_template_inputs=negative_template_inputs,
         )
@@ -411,6 +420,9 @@ def generate(
                 "X-DiffSynth-Request-Id": request_id,
                 "X-DiffSynth-Model-Version": MODEL_ID,
                 "X-DiffSynth-Control": control,
+                "X-DiffSynth-Bpm": str(bpm) if bpm is not None else "model_default",
+                "X-DiffSynth-Keyscale": keyscale if keyscale is not None else "model_default",
+                "X-DiffSynth-Timesignature": timesignature if timesignature is not None else "model_default",
                 "X-DiffSynth-Negative-Prompt-Source": negative_prompt_source,
                 "X-DiffSynth-Conditioning-Seconds": f"{conditioning_elapsed:.3f}",
                 "X-DiffSynth-Inference-Seconds": f"{infer_elapsed:.3f}",
