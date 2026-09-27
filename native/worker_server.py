@@ -309,6 +309,7 @@ def generate(
     audio: UploadFile = File(...),
     reference_audio: UploadFile | None = File(default=None),
     control_audio: UploadFile | None = File(default=None),
+    control_audio_tracks: str = Form(""),
     prompt: str = Form(...),
     negative_prompt: str = Form(""),
     lyrics: str = Form(""),
@@ -333,6 +334,15 @@ def generate(
         raise HTTPException(400, "reference_audio is only valid for the prosody_reference experiment")
     if control_audio is not None and control != "prosody_control":
         raise HTTPException(400, "control_audio is only valid for the prosody_control experiment")
+    selected_control_tracks = [
+        item.strip().lower() for item in control_audio_tracks.split(",") if item.strip()
+    ]
+    if selected_control_tracks and control_audio is None:
+        raise HTTPException(400, "control_audio_tracks requires a separate control_audio")
+    if selected_control_tracks and control != "prosody_control":
+        raise HTTPException(400, "control_audio_tracks is only valid for the prosody_control experiment")
+    if any(item not in {"drums", "bass", "other"} for item in selected_control_tracks):
+        raise HTTPException(400, "control_audio_tracks may contain drums, bass, and/or other")
     if MEMORY_PROFILE in {"resident_prosody", "resident_official"} and control != "prosody":
         raise HTTPException(400, f"{MEMORY_PROFILE} profile only supports prosody conditioning")
     if not prompt.strip():
@@ -421,6 +431,20 @@ def generate(
                 waveform_shape=tuple(control_waveform.shape),
                 mode="positive_branch_only",
             )
+            if selected_control_tracks:
+                track_started = time.perf_counter()
+                control_waveform = PIPE.extract_track(
+                    control_waveform, track=selected_control_tracks
+                )
+                if control_waveform is None:
+                    raise RuntimeError("Official extract_track returned no Control audio")
+                _log(
+                    "CONTROL_TRACKS_EXTRACTED",
+                    request_id,
+                    tracks=selected_control_tracks,
+                    waveform_shape=tuple(control_waveform.shape),
+                    elapsed=f"{time.perf_counter() - track_started:.3f}s",
+                )
         duration = prosody.shape[1] / 48000
         conditioning_elapsed = time.perf_counter() - conditioning_started
         _log(
@@ -527,6 +551,7 @@ def generate(
                 "X-DiffSynth-Model-Version": MODEL_ID,
                 "X-DiffSynth-Control": control,
             "X-DiffSynth-Control-Audio": "separate" if control_audio is not None else "source",
+            "X-DiffSynth-Control-Audio-Tracks": ",".join(selected_control_tracks) or "full_mix",
                 "X-DiffSynth-Bpm": str(bpm) if bpm is not None else "model_default",
                 "X-DiffSynth-Keyscale": keyscale if keyscale is not None else "model_default",
                 "X-DiffSynth-Timesignature": timesignature if timesignature is not None else "model_default",

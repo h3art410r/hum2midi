@@ -60,6 +60,7 @@ class NativeWorkerClient:
         control: str = "prosody",
         reference_audio: Path | None = None,
         control_audio: Path | None = None,
+        control_audio_tracks: tuple[str, ...] | None = None,
         bpm: float | None = None,
         keyscale: str | None = None,
         timesignature: str | None = None,
@@ -72,6 +73,10 @@ class NativeWorkerClient:
             raise WorkerError(f"Control audio not found: {control_audio}")
         if control_audio is not None and control != "prosody_control":
             raise WorkerError("A separate control audio is only valid for the prosody_control experiment")
+        if control_audio_tracks and control_audio is None:
+            raise WorkerError("Control track extraction requires a separate control_audio")
+        if control_audio_tracks and control != "prosody_control":
+            raise WorkerError("Control track extraction is only valid for the prosody_control experiment")
         fields = {
             "prompt": prompt,
             "lyrics": lyrics,
@@ -88,6 +93,8 @@ class NativeWorkerClient:
             fields["keyscale"] = keyscale
         if timesignature is not None:
             fields["timesignature"] = timesignature
+        if control_audio_tracks:
+            fields["control_audio_tracks"] = ",".join(control_audio_tracks)
         body, content_type = _multipart(
             fields,
             "audio",
@@ -150,6 +157,7 @@ class NativeWorkerClient:
             "x-diffsynth-negative-prompt-source",
             "x-diffsynth-control",
             "x-diffsynth-control-audio",
+            "x-diffsynth-control-audio-tracks",
             "x-diffsynth-bpm",
             "x-diffsynth-keyscale",
             "x-diffsynth-timesignature",

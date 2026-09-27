@@ -1,9 +1,9 @@
 """Experimental two-audio Control+Prosody style-context test.
 
 Prosody always comes from the user's original hum. Control comes from the
-best existing generated funk take and is supplied only to the positive CFG
-branch, as in the official Reference example's positive-only template use.
-This is an explicit A/B experiment; it does not change the product path.
+drums and bass of the best existing generated funk take, extracted through
+the official ``pipe.extract_track`` path, and is supplied only to the positive
+CFG branch. This is an explicit A/B experiment; it does not change the product path.
 """
 
 from __future__ import annotations
@@ -62,18 +62,20 @@ def main() -> None:
         cfg_scale=cfg_scale,
         steps=steps,
         control="prosody_control",
+        control_audio_tracks=("drums", "bass"),
     )
     record = {
         "name": "Funk · 原哼唱 Prosody + 已生成 Funk Control 风格上下文",
         "audio": output.name,
         "source_audio": source.name,
         "control_audio": control_source.name,
+        "control_audio_tracks": ["drums", "bass"],
         "seed": seed,
         "cfg_scale": cfg_scale,
         "steps": steps,
         "control": "prosody_control",
         "control_branch_design": {
-            "positive": "Control from prior Funk candidate + Prosody from original hum",
+            "positive": "Control drums/bass extracted from prior Funk candidate + Prosody from original hum",
             "negative": "Prosody from original hum only",
         },
         "prompt": prompt,

@@ -31,7 +31,7 @@ class WorkerMultipartTests(unittest.TestCase):
 
     def test_separate_control_audio_is_sent_as_a_third_file_part(self):
         body, _ = _multipart(
-            {"control": "prosody_control"},
+            {"control": "prosody_control", "control_audio_tracks": "drums,bass"},
             "audio",
             "hum.wav",
             b"hum-data",
@@ -42,6 +42,8 @@ class WorkerMultipartTests(unittest.TestCase):
         rendered = body.decode("utf-8")
         self.assertIn('name="audio"; filename="hum.wav"', rendered)
         self.assertIn('name="control_audio"; filename="funk-context.wav"', rendered)
+        self.assertIn('name="control_audio_tracks"', rendered)
+        self.assertIn("drums,bass", rendered)
         self.assertEqual(rendered.count("filename="), 2)
 
 
