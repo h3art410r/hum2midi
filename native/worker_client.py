@@ -60,6 +60,8 @@ class NativeWorkerClient:
         control: str = "prosody",
         reference_audio: Path | None = None,
         control_audio: Path | None = None,
+        control_audio_other: Path | None = None,
+        control_audio_other_weight: float = 0.35,
         control_audio_tracks: tuple[str, ...] | None = None,
         control_audio_branches: str = "positive",
         bpm: float | None = None,
@@ -72,8 +74,16 @@ class NativeWorkerClient:
             raise WorkerError(f"Reference audio not found: {reference_audio}")
         if control_audio is not None and not control_audio.is_file():
             raise WorkerError(f"Control audio not found: {control_audio}")
+        if control_audio_other is not None and not control_audio_other.is_file():
+            raise WorkerError(f"Secondary Control audio not found: {control_audio_other}")
         if control_audio is not None and control != "prosody_control":
             raise WorkerError("A separate control audio is only valid for the prosody_control experiment")
+        if control_audio_other is not None and (control_audio is None or control != "prosody_control"):
+            raise WorkerError("A secondary Control audio requires the prosody_control experiment")
+        if control_audio_other is not None and not control_audio_tracks:
+            raise WorkerError("A secondary Control audio requires selected primary Control tracks")
+        if control_audio_other is not None and not 0.0 <= control_audio_other_weight <= 1.0:
+            raise WorkerError("Secondary Control energy weight must be between 0 and 1")
         if control_audio_tracks and control_audio is None:
             raise WorkerError("Control track extraction requires a separate control_audio")
         if control_audio_tracks and control != "prosody_control":
@@ -102,6 +112,8 @@ class NativeWorkerClient:
             fields["control_audio_tracks"] = ",".join(control_audio_tracks)
         if control_audio is not None:
             fields["control_audio_branches"] = control_audio_branches
+        if control_audio_other is not None:
+            fields["control_audio_other_weight"] = str(control_audio_other_weight)
         body, content_type = _multipart(
             fields,
             "audio",
@@ -116,6 +128,16 @@ class NativeWorkerClient:
             extra_control=(
                 ("control_audio", control_audio.name, control_audio.read_bytes(), "audio/wav")
                 if control_audio is not None
+                else None
+            ),
+            extra_control_other=(
+                (
+                    "control_audio_other",
+                    control_audio_other.name,
+                    control_audio_other.read_bytes(),
+                    "audio/wav",
+                )
+                if control_audio_other is not None
                 else None
             ),
         )
@@ -165,6 +187,8 @@ class NativeWorkerClient:
             "x-diffsynth-control",
             "x-diffsynth-control-audio",
             "x-diffsynth-control-audio-tracks",
+            "x-diffsynth-control-audio-other",
+            "x-diffsynth-control-audio-other-weight",
             "x-diffsynth-control-audio-branches",
             "x-diffsynth-bpm",
             "x-diffsynth-keyscale",
@@ -224,6 +248,7 @@ def _multipart(
     *,
     reference: tuple[str, str, bytes, str] | None = None,
     extra_control: tuple[str, str, bytes, str] | None = None,
+    extra_control_other: tuple[str, str, bytes, str] | None = None,
 ) -> tuple[bytes, str]:
     boundary = f"----hum2midi-native-{uuid.uuid4().hex}"
     chunks: list[bytes] = []
@@ -241,6 +266,8 @@ def _multipart(
         file_parts.append(reference)
     if extra_control is not None:
         file_parts.append(extra_control)
+    if extra_control_other is not None:
+        file_parts.append(extra_control_other)
     for file_name, file_filename, file_data, file_mime in file_parts:
         chunks.extend(
             [

@@ -21,6 +21,7 @@ from diffsynth.core.data.operators import LoadMultiTrackAudio
 from diffsynth.diffusion.template import TemplatePipeline
 from diffsynth.pipelines.diffsynth_music import DiffSynthMusicPipeline, ModelConfig
 from diffsynth.utils.music_tools import extract_prosody
+from native.control_mix import mix_control_contexts
 
 MODEL_ID = os.getenv("DIFFSYNTH_MODEL_ID", "DiffSynth-Studio/DiffSynth-Music")
 HOST = os.getenv("DIFFSYNTH_SERVER_HOST", "0.0.0.0")
@@ -309,8 +310,10 @@ def generate(
     audio: UploadFile = File(...),
     reference_audio: UploadFile | None = File(default=None),
     control_audio: UploadFile | None = File(default=None),
+    control_audio_other: UploadFile | None = File(default=None),
     control_audio_tracks: str = Form(""),
     control_audio_branches: str = Form("positive"),
+    control_audio_other_weight: float = Form(0.35),
     prompt: str = Form(...),
     negative_prompt: str = Form(""),
     lyrics: str = Form(""),
@@ -335,6 +338,10 @@ def generate(
         raise HTTPException(400, "reference_audio is only valid for the prosody_reference experiment")
     if control_audio is not None and control != "prosody_control":
         raise HTTPException(400, "control_audio is only valid for the prosody_control experiment")
+    if control_audio_other is not None and (control_audio is None or control != "prosody_control"):
+        raise HTTPException(400, "control_audio_other requires a separate prosody_control experiment")
+    if control_audio_other is not None and not 0.0 <= control_audio_other_weight <= 1.0:
+        raise HTTPException(400, "control_audio_other_weight must be between 0 and 1")
     selected_control_tracks = [
         item.strip().lower() for item in control_audio_tracks.split(",") if item.strip()
     ]
@@ -348,6 +355,8 @@ def generate(
         raise HTTPException(400, "control_audio_branches='both' requires a separate control_audio")
     if any(item not in {"drums", "bass", "other"} for item in selected_control_tracks):
         raise HTTPException(400, "control_audio_tracks may contain drums, bass, and/or other")
+    if control_audio_other is not None and not selected_control_tracks:
+        raise HTTPException(400, "control_audio_other requires selected primary control tracks")
     if MEMORY_PROFILE in {"resident_prosody", "resident_official"} and control != "prosody":
         raise HTTPException(400, f"{MEMORY_PROFILE} profile only supports prosody conditioning")
     if not prompt.strip():
@@ -451,6 +460,54 @@ def generate(
                     tracks=selected_control_tracks,
                     waveform_shape=tuple(control_waveform.shape),
                     elapsed=f"{time.perf_counter() - track_started:.3f}s",
+                )
+            if control_audio_other is not None:
+                other_payload = control_audio_other.file.read()
+                if not other_payload:
+                    raise HTTPException(400, "control_audio_other is empty")
+                other_path = WORK_DIR / f"{request_id}-control-other.wav"
+                other_path.write_bytes(other_payload)
+                try:
+                    other_source_waveform = loader(str(other_path))
+                except (ImportError, RuntimeError) as exc:
+                    if "torchcodec" not in str(exc).lower():
+                        raise
+                    _log("TORCHCODEC_UNAVAILABLE", request_id, fallback="soundfile", error=str(exc))
+                    other_source_waveform = _load_wav_without_torchcodec(
+                        other_path, division_factor=3840
+                    )
+                if other_source_waveform is None:
+                    raise RuntimeError("Secondary Control audio loader returned no waveform")
+                other_track_started = time.perf_counter()
+                other_waveform = PIPE.extract_track(other_source_waveform, track=["other"])
+                if other_waveform is None:
+                    raise RuntimeError("Official extract_track returned no secondary other track")
+                _log(
+                    "CONTROL_OTHER_TRACK_EXTRACTED",
+                    request_id,
+                    filename=control_audio_other.filename or "control-other.wav",
+                    waveform_shape=tuple(other_waveform.shape),
+                    elapsed=f"{time.perf_counter() - other_track_started:.3f}s",
+                )
+                mixed, mix_stats = mix_control_contexts(
+                    control_waveform.detach().float().cpu().numpy(),
+                    other_waveform.detach().float().cpu().numpy(),
+                    other_weight=control_audio_other_weight,
+                )
+                control_waveform = torch.from_numpy(mixed).to(
+                    device=control_waveform.device,
+                    dtype=control_waveform.dtype,
+                )
+                _log(
+                    "CONTROL_CONTEXTS_MIXED",
+                    request_id,
+                    primary_tracks=selected_control_tracks or "full_mix",
+                    secondary_track="other",
+                    secondary_weight=control_audio_other_weight,
+                    primary_rms=f"{mix_stats['primary_rms']:.6f}",
+                    secondary_rms=f"{mix_stats['other_rms']:.6f}",
+                    mixed_rms=f"{mix_stats['mixed_rms']:.6f}",
+                    limiter_gain=f"{mix_stats['limiter_gain']:.6f}",
                 )
         duration = prosody.shape[1] / 48000
         conditioning_elapsed = time.perf_counter() - conditioning_started
@@ -559,8 +616,10 @@ def generate(
                 "X-DiffSynth-Request-Id": request_id,
                 "X-DiffSynth-Model-Version": MODEL_ID,
                 "X-DiffSynth-Control": control,
-            "X-DiffSynth-Control-Audio": "separate" if control_audio is not None else "source",
-            "X-DiffSynth-Control-Audio-Tracks": ",".join(selected_control_tracks) or "full_mix",
+                "X-DiffSynth-Control-Audio": "separate" if control_audio is not None else "source",
+                "X-DiffSynth-Control-Audio-Tracks": ",".join(selected_control_tracks) or "full_mix",
+                "X-DiffSynth-Control-Audio-Other": "separate_other" if control_audio_other is not None else "none",
+                "X-DiffSynth-Control-Audio-Other-Weight": str(control_audio_other_weight) if control_audio_other is not None else "none",
                 "X-DiffSynth-Control-Audio-Branches": control_audio_branches,
                 "X-DiffSynth-Bpm": str(bpm) if bpm is not None else "model_default",
                 "X-DiffSynth-Keyscale": keyscale if keyscale is not None else "model_default",

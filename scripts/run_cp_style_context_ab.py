@@ -22,24 +22,35 @@ from native.worker_client import NativeWorkerClient, WorkerConfig
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cfg-scale", type=float)
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--control-source", type=Path)
+    parser.add_argument("--other-control-source", type=Path)
+    parser.add_argument("--other-weight", type=float, default=0.35)
     parser.add_argument("--suffix", default="both_branches")
     parser.add_argument("--control-tracks", default="drums,bass")
     args = parser.parse_args()
     folder = ROOT / "native/static/official"
     source = folder / "debug_recent_input.wav"
-    control_source = folder / "experiment_funk_hook_recompose_seed7.wav"
+    control_source = args.control_source or Path("native/static/official/experiment_funk_hook_recompose_seed7.wav")
+    if not control_source.is_absolute():
+        control_source = ROOT / control_source
+    other_control_source = args.other_control_source
+    if other_control_source is not None and not other_control_source.is_absolute():
+        other_control_source = ROOT / other_control_source
     baseline_path = folder / "experiment_funk_hook_recompose_seed7.json"
     output = folder / f"experiment_funk_separate_style_control_{args.suffix}.wav"
     record_path = folder / f"experiment_funk_separate_style_control_{args.suffix}.json"
 
-    for path in (source, control_source, baseline_path):
+    for path in (source, control_source, other_control_source, baseline_path):
+        if path is None:
+            continue
         if not path.is_file():
             raise SystemExit(f"Required A/B input is missing: {path}")
 
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
     prompt = baseline["prompt"]
     negative = baseline["negative_prompt"]
-    seed = int(baseline["seed"])
+    seed = int(args.seed if args.seed is not None else baseline["seed"])
     cfg_scale = float(args.cfg_scale if args.cfg_scale is not None else baseline["cfg_scale"])
     steps = int(baseline["steps"])
     control_tracks = tuple(
@@ -59,6 +70,7 @@ def main() -> None:
 
     print(
         f"START source=original_hum control_context={control_source.name} "
+        f"other_context={other_control_source.name if other_control_source else 'none'} "
         f"tracks={','.join(control_tracks)} seed={seed} cfg={cfg_scale} steps={steps}",
         flush=True,
     )
@@ -66,6 +78,8 @@ def main() -> None:
         source,
         output,
         control_audio=control_source,
+        control_audio_other=other_control_source,
+        control_audio_other_weight=args.other_weight,
         prompt=prompt,
         negative_prompt=negative,
         lyrics="",
@@ -77,10 +91,15 @@ def main() -> None:
         control_audio_branches="both",
     )
     record = {
-        "name": f"Funk · 原哼唱 Prosody + 官方{'+'.join(control_tracks)} Control 双分支 · CFG{cfg_scale:g}",
+        "name": (
+            f"Funk · 原哼唱 Prosody + {','.join(control_tracks)} Control 双分支 · CFG{cfg_scale:g}"
+            + (f" + other({args.other_weight:.0%})" if other_control_source else "")
+        ),
         "audio": output.name,
         "source_audio": source.name,
         "control_audio": control_source.name,
+        "control_audio_other": other_control_source.name if other_control_source else None,
+        "control_audio_other_weight": args.other_weight if other_control_source else None,
         "control_audio_tracks": list(control_tracks),
         "control_audio_branches": "both",
         "seed": seed,
@@ -88,30 +107,33 @@ def main() -> None:
         "steps": steps,
         "control": "prosody_control",
         "control_branch_design": {
-            "positive": f"Control {','.join(control_tracks)} extracted from prior Funk candidate + Prosody from original hum",
-            "negative": f"the same Control {','.join(control_tracks)} and Prosody from original hum",
+            "positive": f"Control {','.join(control_tracks)} from {control_source.name}"
+            + (f" blended with other from {other_control_source.name}" if other_control_source else "")
+            + " + Prosody from original hum",
+            "negative": f"the same Control and Prosody from original hum",
         },
         "prompt": prompt,
         "negative_prompt": negative,
         "prompt_zh": (
-            f"原哼唱只用于 Prosody 旋律条件；从 Funk 候选中按官方 extract_track 提取 {','.join(control_tracks)}，"
-            "作为 Control 条件。正向和负向 CFG 分支使用相同的伴奏 Control 与原始 Prosody；"
+            f"原哼唱只用于 Prosody 旋律条件；从 {control_source.name} 按官方 extract_track 提取 {','.join(control_tracks)}，"
+            + (
+                f"再从 {other_control_source.name} 提取 other，以能量权重 {args.other_weight:.0%} 混入 Control；"
+                if other_control_source
+                else ""
+            )
+            + "作为 Control 条件。正向和负向 CFG 分支使用相同的伴奏 Control 与原始 Prosody；"
             f"提示词、随机种子和步数与 seed7 基线相同；本次 CFG={cfg_scale:g}。"
         ),
         "status": (
-            f"显式技术 A/B：原录音提供 Prosody，已有 Funk 候选仅提取 {','.join(control_tracks)} 作为双分支 Control；"
+            f"显式技术 A/B：原录音提供 Prosody，{control_source.name} 提取 {','.join(control_tracks)}"
+            + (f" 与 {other_control_source.name} 提取的 other 混合" if other_control_source else "")
+            + " 作为双分支 Control；"
             "未改正式 Prosody-only 链路。"
         ),
         "diagnostics": diagnostics,
         "worker_health": health,
     }
     record_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
-    manifest_path = folder / "debug_experiment.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["items"] = [record] + [
-        item for item in manifest.get("items", []) if item.get("audio") != output.name
-    ]
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"DONE total={diagnostics.get('total_seconds')}s peak={diagnostics.get('peak_reserved_gb')}GB", flush=True)
 
 
