@@ -226,6 +226,8 @@
 
 首次把完整 Funk 输出作为正向 Control 输入但负向分支不带 Control，结果 CLAP Funk 只有0.0386、起音相关0.1941；按官方 `extract_track` 只取鼓/贝斯后，正向独有 Control 的结果 CLAP0.1100、起音0.5816、Chroma0.4304。随后把相同鼓/贝斯 Control 放进正负两条 CFG 分支：CFG4.5 的 CLAP/起音/Chroma为0.4300/0.5484/0.3788；CFG4.0为0.4577/0.5463/0.3837。CFG4.0 AST 人声/哼唱概率0.002294/0.000217，输出10.48秒；连同约7秒鼓贝斯分离，总计87.2秒，峰值预留显存15.885GB。
 
-原来 seed7 Control+Prosody 对照的 CLAP/起音/Chroma为0.4207/0.6125/0.6274，Pitch50近似值0.4173；新 CFG4.0 在 CLAP 和频谱层次上有小幅增强、起音相关保持中等，但 Chroma/Pitch50明显下降。Pitch50、Chroma、CLAP均只是复调混音诊断代理，不能证明“用户能听出原旋律”或“更惊艳”。当前调试页仅保留 seed7 基线、官方鼓贝斯 Control CFG4.5/4.0 三条用于并排人工试听；不得把该实验自动替换正式 Prosody-only 链路。用户试听反馈后再选择下一项技术变量。
+原来 seed7 Control+Prosody 对照的 CLAP/起音/Chroma为0.4207/0.6125/0.6274，Pitch50近似值0.4173。CFG4、仅用鼓/贝斯 Control 的版本为Pitch50/起音/Chroma/CLAP 0.1395/0.5463/0.3837/0.4577，旋律指标明显变差。
+
+继续固定全部参数和 CFG4，只把Control分离轨从 `drums,bass` 扩展为官方示例完整伴奏组 `drums,bass,other` 后，Pitch50/起音/Chroma/CLAP回升到0.3953/0.5787/0.6066/0.4656，接近原基线的旋律、节奏代理，同时Funk CLAP高0.0449。输出10.48秒，分离2.0秒，总请求99.547秒，峰值预留15.873GB；AST人声/哼唱概率0.002489/0.000394。该条件构造目前是最平衡的自动筛查候选，但仍须人工确认听感，代理指标不能证明“用户能听出原旋律”或“更惊艳”。调试页已缩为三条：seed7基线、CFG4鼓/贝斯 Control、CFG4鼓/贝斯/other Control；不得把实验自动替换正式 Prosody-only 链路。
 
 为避免短 Reference 实验失败后留下懒加载 CUDA 权重，Worker 异常路径现在会释放 Pipeline 对象、执行垃圾回收与 `torch.cuda.empty_cache()`；`b6d66cc` 已推送并由 daemon 自动部署。单独 Control 音频、官方鼓/贝斯分离与正负 CFG 分支选项已在后续 Worker 实验接口中实现，相关推理分别使用 `35bc823`、`5b10b52`、`9851d85` 构建；客户端单测3项通过。此能力仍仅用于显式 A/B。

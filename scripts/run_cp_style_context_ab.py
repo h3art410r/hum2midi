@@ -23,6 +23,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cfg-scale", type=float)
     parser.add_argument("--suffix", default="both_branches")
+    parser.add_argument("--control-tracks", default="drums,bass")
     args = parser.parse_args()
     folder = ROOT / "native/static/official"
     source = folder / "debug_recent_input.wav"
@@ -41,6 +42,11 @@ def main() -> None:
     seed = int(baseline["seed"])
     cfg_scale = float(args.cfg_scale if args.cfg_scale is not None else baseline["cfg_scale"])
     steps = int(baseline["steps"])
+    control_tracks = tuple(
+        item.strip().lower() for item in args.control_tracks.split(",") if item.strip()
+    )
+    if not control_tracks or any(item not in {"drums", "bass", "other"} for item in control_tracks):
+        raise SystemExit("--control-tracks must be a comma-separated subset of drums,bass,other")
 
     client = NativeWorkerClient(
         WorkerConfig(url="http://192.168.9.100:8765", timeout_seconds=900)
@@ -53,7 +59,7 @@ def main() -> None:
 
     print(
         f"START source=original_hum control_context={control_source.name} "
-        f"seed={seed} cfg={cfg_scale} steps={steps}",
+        f"tracks={','.join(control_tracks)} seed={seed} cfg={cfg_scale} steps={steps}",
         flush=True,
     )
     diagnostics = client.generate(
@@ -67,33 +73,33 @@ def main() -> None:
         cfg_scale=cfg_scale,
         steps=steps,
         control="prosody_control",
-        control_audio_tracks=("drums", "bass"),
+        control_audio_tracks=control_tracks,
         control_audio_branches="both",
     )
     record = {
-        "name": f"Funk · 原哼唱 Prosody + 官方鼓贝斯 Control 双分支 · CFG{cfg_scale:g}",
+        "name": f"Funk · 原哼唱 Prosody + 官方{'+'.join(control_tracks)} Control 双分支 · CFG{cfg_scale:g}",
         "audio": output.name,
         "source_audio": source.name,
         "control_audio": control_source.name,
-        "control_audio_tracks": ["drums", "bass"],
+        "control_audio_tracks": list(control_tracks),
         "control_audio_branches": "both",
         "seed": seed,
         "cfg_scale": cfg_scale,
         "steps": steps,
         "control": "prosody_control",
         "control_branch_design": {
-            "positive": "Control drums/bass extracted from prior Funk candidate + Prosody from original hum",
-            "negative": "the same Control drums/bass and Prosody from original hum",
+            "positive": f"Control {','.join(control_tracks)} extracted from prior Funk candidate + Prosody from original hum",
+            "negative": f"the same Control {','.join(control_tracks)} and Prosody from original hum",
         },
         "prompt": prompt,
         "negative_prompt": negative,
         "prompt_zh": (
-            "原哼唱只用于 Prosody 旋律条件；从一条 Funk 候选中按官方 extract_track 方式提取鼓和贝斯，"
-            "作为 Control 条件。正向和负向 CFG 分支使用相同的鼓贝斯 Control 与原始 Prosody；"
+            f"原哼唱只用于 Prosody 旋律条件；从 Funk 候选中按官方 extract_track 提取 {','.join(control_tracks)}，"
+            "作为 Control 条件。正向和负向 CFG 分支使用相同的伴奏 Control 与原始 Prosody；"
             f"提示词、随机种子和步数与 seed7 基线相同；本次 CFG={cfg_scale:g}。"
         ),
         "status": (
-            "显式技术 A/B：原录音提供 Prosody，已有 Funk 候选仅提取 drums/bass 作为双分支 Control；"
+            f"显式技术 A/B：原录音提供 Prosody，已有 Funk 候选仅提取 {','.join(control_tracks)} 作为双分支 Control；"
             "未改正式 Prosody-only 链路。"
         ),
         "diagnostics": diagnostics,
