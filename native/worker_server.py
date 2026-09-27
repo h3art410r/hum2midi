@@ -310,6 +310,7 @@ def generate(
     reference_audio: UploadFile | None = File(default=None),
     control_audio: UploadFile | None = File(default=None),
     control_audio_tracks: str = Form(""),
+    control_audio_branches: str = Form("positive"),
     prompt: str = Form(...),
     negative_prompt: str = Form(""),
     lyrics: str = Form(""),
@@ -341,6 +342,10 @@ def generate(
         raise HTTPException(400, "control_audio_tracks requires a separate control_audio")
     if selected_control_tracks and control != "prosody_control":
         raise HTTPException(400, "control_audio_tracks is only valid for the prosody_control experiment")
+    if control_audio_branches not in {"positive", "both"}:
+        raise HTTPException(400, "control_audio_branches must be 'positive' or 'both'")
+    if control_audio_branches == "both" and control_audio is None:
+        raise HTTPException(400, "control_audio_branches='both' requires a separate control_audio")
     if any(item not in {"drums", "bass", "other"} for item in selected_control_tracks):
         raise HTTPException(400, "control_audio_tracks may contain drums, bass, and/or other")
     if MEMORY_PROFILE in {"resident_prosody", "resident_official"} and control != "prosody":
@@ -364,6 +369,8 @@ def generate(
         bpm=bpm if bpm is not None else "model_default",
         keyscale=keyscale if keyscale is not None else "model_default",
         timesignature=timesignature if timesignature is not None else "model_default",
+        control_audio_branches=control_audio_branches,
+        control_audio_tracks=selected_control_tracks,
     )
     input_path = WORK_DIR / f"{request_id}-input.wav"
     output_path = WORK_DIR / f"{request_id}-output.wav"
@@ -429,7 +436,7 @@ def generate(
                 bytes=len(control_payload),
                 filename=control_audio.filename or "control.wav",
                 waveform_shape=tuple(control_waveform.shape),
-                mode="positive_branch_only",
+                branches=control_audio_branches,
             )
             if selected_control_tracks:
                 track_started = time.perf_counter()
@@ -483,21 +490,23 @@ def generate(
             ]
         else:
             # The paper describes joint conditioning as concatenating the
-            # independently encoded Control and Prosody KV memories. Keep the
-            # same conditions on the negative CFG branch, as the official
-            # single-condition examples do, so only text guidance differs.
+            # independently encoded Control and Prosody KV memories. The
+            # standard path uses the same conditions on both CFG branches;
+            # explicit A/B requests may use a separate Control source and
+            # choose whether to apply it to the negative branch as well.
             template_inputs = [
                 {"model_id": 0, "audio": control_waveform},
                 {"model_id": 1, "audio": prosody},
             ]
-            negative_template_inputs = (
-                [{"model_id": 1, "audio": prosody}]
-                if control_audio is not None
-                else [
-                    {"model_id": 0, "audio": waveform},
-                    {"model_id": 1, "audio": prosody},
-                ]
-            )
+            negative_control_audio = control_waveform if control_audio is not None else waveform
+            negative_template_inputs = [
+                *(
+                    [{"model_id": 0, "audio": negative_control_audio}]
+                    if control_audio is None or control_audio_branches == "both"
+                    else []
+                ),
+                {"model_id": 1, "audio": prosody},
+            ]
         _log(
             "MODEL_INFER_START",
             request_id,
@@ -552,6 +561,7 @@ def generate(
                 "X-DiffSynth-Control": control,
             "X-DiffSynth-Control-Audio": "separate" if control_audio is not None else "source",
             "X-DiffSynth-Control-Audio-Tracks": ",".join(selected_control_tracks) or "full_mix",
+                "X-DiffSynth-Control-Audio-Branches": control_audio_branches,
                 "X-DiffSynth-Bpm": str(bpm) if bpm is not None else "model_default",
                 "X-DiffSynth-Keyscale": keyscale if keyscale is not None else "model_default",
                 "X-DiffSynth-Timesignature": timesignature if timesignature is not None else "model_default",

@@ -23,8 +23,8 @@ def main() -> None:
     source = folder / "debug_recent_input.wav"
     control_source = folder / "experiment_funk_hook_recompose_seed7.wav"
     baseline_path = folder / "experiment_funk_hook_recompose_seed7.json"
-    output = folder / "experiment_funk_separate_style_control.wav"
-    record_path = folder / "experiment_funk_separate_style_control.json"
+    output = folder / "experiment_funk_separate_style_control_both_branches.wav"
+    record_path = folder / "experiment_funk_separate_style_control_both_branches.json"
 
     for path in (source, control_source, baseline_path):
         if not path.is_file():
@@ -63,26 +63,32 @@ def main() -> None:
         steps=steps,
         control="prosody_control",
         control_audio_tracks=("drums", "bass"),
+        control_audio_branches="both",
     )
     record = {
-        "name": "Funk · 原哼唱 Prosody + 已生成 Funk Control 风格上下文",
+        "name": "Funk · 原哼唱 Prosody + 官方鼓贝斯 Control 双分支",
         "audio": output.name,
         "source_audio": source.name,
         "control_audio": control_source.name,
         "control_audio_tracks": ["drums", "bass"],
+        "control_audio_branches": "both",
         "seed": seed,
         "cfg_scale": cfg_scale,
         "steps": steps,
         "control": "prosody_control",
         "control_branch_design": {
             "positive": "Control drums/bass extracted from prior Funk candidate + Prosody from original hum",
-            "negative": "Prosody from original hum only",
+            "negative": "the same Control drums/bass and Prosody from original hum",
         },
         "prompt": prompt,
         "negative_prompt": negative,
-        "prompt_zh": baseline.get("prompt_zh", ""),
+        "prompt_zh": (
+            "原哼唱只用于 Prosody 旋律条件；从一条 Funk 候选中按官方 extract_track 方式提取鼓和贝斯，"
+            "作为 Control 条件。正向和负向 CFG 分支使用相同的鼓贝斯 Control 与原始 Prosody；"
+            "正向提示词、负向提示词、随机种子、CFG 和步数与 seed7 基线相同。"
+        ),
         "status": (
-            "显式技术 A/B：原录音仅提供旋律/节奏 Prosody；已有 Funk 候选只提供正向 Control 风格上下文；"
+            "显式技术 A/B：原录音提供 Prosody，已有 Funk 候选仅提取 drums/bass 作为双分支 Control；"
             "未改正式 Prosody-only 链路。"
         ),
         "diagnostics": diagnostics,

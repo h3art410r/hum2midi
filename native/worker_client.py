@@ -61,6 +61,7 @@ class NativeWorkerClient:
         reference_audio: Path | None = None,
         control_audio: Path | None = None,
         control_audio_tracks: tuple[str, ...] | None = None,
+        control_audio_branches: str = "positive",
         bpm: float | None = None,
         keyscale: str | None = None,
         timesignature: str | None = None,
@@ -77,6 +78,10 @@ class NativeWorkerClient:
             raise WorkerError("Control track extraction requires a separate control_audio")
         if control_audio_tracks and control != "prosody_control":
             raise WorkerError("Control track extraction is only valid for the prosody_control experiment")
+        if control_audio_branches not in {"positive", "both"}:
+            raise WorkerError("Control audio branches must be 'positive' or 'both'")
+        if control_audio_branches == "both" and control_audio is None:
+            raise WorkerError("Control audio in both CFG branches requires a separate control_audio")
         fields = {
             "prompt": prompt,
             "lyrics": lyrics,
@@ -95,6 +100,8 @@ class NativeWorkerClient:
             fields["timesignature"] = timesignature
         if control_audio_tracks:
             fields["control_audio_tracks"] = ",".join(control_audio_tracks)
+        if control_audio is not None:
+            fields["control_audio_branches"] = control_audio_branches
         body, content_type = _multipart(
             fields,
             "audio",
@@ -158,6 +165,7 @@ class NativeWorkerClient:
             "x-diffsynth-control",
             "x-diffsynth-control-audio",
             "x-diffsynth-control-audio-tracks",
+            "x-diffsynth-control-audio-branches",
             "x-diffsynth-bpm",
             "x-diffsynth-keyscale",
             "x-diffsynth-timesignature",
