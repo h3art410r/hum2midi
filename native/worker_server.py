@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import os
 import threading
 import time
@@ -233,6 +234,38 @@ def load_models() -> None:
         memory_profile=MEMORY_PROFILE,
         **{f"cuda_{key}": f"{value:.3f}" if value is not None else "none" for key, value in _cuda_memory().items()},
     )
+
+
+def _release_model_state_after_failure(request_id: str) -> None:
+    """Drop lazy-loaded CUDA modules after a failed inference.
+
+    TemplatePipeline can leave a lazily fetched template resident when an
+    exception interrupts its forward pass. Releasing both pipeline objects
+    lets the next request rebuild the low-memory setup cleanly.
+    """
+    global PIPE, TEMPLATE, MODEL_READY
+
+    PIPE = None
+    TEMPLATE = None
+    MODEL_READY = False
+    try:
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        _log(
+            "MODEL_STATE_RELEASED",
+            request_id,
+            **{
+                f"cuda_{key}": f"{value:.3f}" if value is not None else "none"
+                for key, value in _cuda_memory().items()
+            },
+        )
+    except Exception as cleanup_error:
+        _log(
+            "MODEL_STATE_RELEASE_WARNING",
+            request_id,
+            error=f"{type(cleanup_error).__name__}: {cleanup_error}",
+        )
 
 
 @app.on_event("startup")
@@ -476,6 +509,7 @@ def generate(
         raise
     except Exception as exc:
         _log("REQUEST_ERROR", request_id, error=f"{type(exc).__name__}: {exc}")
+        _release_model_state_after_failure(request_id)
         traceback.print_exc()
         raise HTTPException(500, f"Native DiffSynth generation failed: {type(exc).__name__}: {exc}") from exc
     finally:
