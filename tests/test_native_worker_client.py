@@ -29,6 +29,21 @@ class WorkerMultipartTests(unittest.TestCase):
         self.assertNotIn("reference_audio", rendered)
         self.assertEqual(rendered.count("Content-Disposition: form-data; name="), 2)
 
+    def test_separate_control_audio_is_sent_as_a_third_file_part(self):
+        body, _ = _multipart(
+            {"control": "prosody_control"},
+            "audio",
+            "hum.wav",
+            b"hum-data",
+            "audio/wav",
+            extra_control=("control_audio", "funk-context.wav", b"funk-data", "audio/wav"),
+        )
+
+        rendered = body.decode("utf-8")
+        self.assertIn('name="audio"; filename="hum.wav"', rendered)
+        self.assertIn('name="control_audio"; filename="funk-context.wav"', rendered)
+        self.assertEqual(rendered.count("filename="), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

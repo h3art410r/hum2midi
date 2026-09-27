@@ -308,6 +308,7 @@ def debug_logs(since: int = 0, limit: int = 200, request_id: str = "") -> dict[s
 def generate(
     audio: UploadFile = File(...),
     reference_audio: UploadFile | None = File(default=None),
+    control_audio: UploadFile | None = File(default=None),
     prompt: str = Form(...),
     negative_prompt: str = Form(""),
     lyrics: str = Form(""),
@@ -330,6 +331,8 @@ def generate(
         raise HTTPException(400, "prosody_reference requires a reference_audio file")
     if control != "prosody_reference" and reference_audio is not None:
         raise HTTPException(400, "reference_audio is only valid for the prosody_reference experiment")
+    if control_audio is not None and control != "prosody_control":
+        raise HTTPException(400, "control_audio is only valid for the prosody_control experiment")
     if MEMORY_PROFILE in {"resident_prosody", "resident_official"} and control != "prosody":
         raise HTTPException(400, f"{MEMORY_PROFILE} profile only supports prosody conditioning")
     if not prompt.strip():
@@ -392,6 +395,32 @@ def generate(
                 filename=reference_audio.filename or "reference.wav",
                 waveform_shape=tuple(reference_waveform.shape),
             )
+        control_waveform = waveform
+        if control_audio is not None:
+            control_payload = control_audio.file.read()
+            if not control_payload:
+                raise HTTPException(400, "control_audio is empty")
+            control_path = WORK_DIR / f"{request_id}-control.wav"
+            control_path.write_bytes(control_payload)
+            try:
+                control_waveform = loader(str(control_path))
+            except (ImportError, RuntimeError) as exc:
+                if "torchcodec" not in str(exc).lower():
+                    raise
+                _log("TORCHCODEC_UNAVAILABLE", request_id, fallback="soundfile", error=str(exc))
+                control_waveform = _load_wav_without_torchcodec(
+                    control_path, division_factor=3840
+                )
+            if control_waveform is None:
+                raise RuntimeError("Control audio loader returned no waveform")
+            _log(
+                "CONTROL_AUDIO_SAVED",
+                request_id,
+                bytes=len(control_payload),
+                filename=control_audio.filename or "control.wav",
+                waveform_shape=tuple(control_waveform.shape),
+                mode="positive_branch_only",
+            )
         duration = prosody.shape[1] / 48000
         conditioning_elapsed = time.perf_counter() - conditioning_started
         _log(
@@ -412,7 +441,7 @@ def generate(
             template_inputs = [{"model_id": prosody_model_id, "audio": prosody}]
             negative_template_inputs = [{"model_id": prosody_model_id, "audio": prosody}]
         elif control == "control":
-            template_inputs = [{"model_id": 0, "audio": waveform}]
+            template_inputs = [{"model_id": 0, "audio": control_waveform}]
             negative_template_inputs = [{"model_id": 0, "audio": waveform}]
         elif control == "prosody_reference":
             assert reference_waveform is not None
@@ -434,13 +463,17 @@ def generate(
             # same conditions on the negative CFG branch, as the official
             # single-condition examples do, so only text guidance differs.
             template_inputs = [
-                {"model_id": 0, "audio": waveform},
+                {"model_id": 0, "audio": control_waveform},
                 {"model_id": 1, "audio": prosody},
             ]
-            negative_template_inputs = [
-                {"model_id": 0, "audio": waveform},
-                {"model_id": 1, "audio": prosody},
-            ]
+            negative_template_inputs = (
+                [{"model_id": 1, "audio": prosody}]
+                if control_audio is not None
+                else [
+                    {"model_id": 0, "audio": waveform},
+                    {"model_id": 1, "audio": prosody},
+                ]
+            )
         _log(
             "MODEL_INFER_START",
             request_id,
@@ -493,6 +526,7 @@ def generate(
                 "X-DiffSynth-Request-Id": request_id,
                 "X-DiffSynth-Model-Version": MODEL_ID,
                 "X-DiffSynth-Control": control,
+            "X-DiffSynth-Control-Audio": "separate" if control_audio is not None else "source",
                 "X-DiffSynth-Bpm": str(bpm) if bpm is not None else "model_default",
                 "X-DiffSynth-Keyscale": keyscale if keyscale is not None else "model_default",
                 "X-DiffSynth-Timesignature": timesignature if timesignature is not None else "model_default",

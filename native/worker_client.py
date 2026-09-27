@@ -59,6 +59,7 @@ class NativeWorkerClient:
         steps: int,
         control: str = "prosody",
         reference_audio: Path | None = None,
+        control_audio: Path | None = None,
         bpm: float | None = None,
         keyscale: str | None = None,
         timesignature: str | None = None,
@@ -67,6 +68,10 @@ class NativeWorkerClient:
             raise WorkerError(f"Input audio not found: {source}")
         if reference_audio is not None and not reference_audio.is_file():
             raise WorkerError(f"Reference audio not found: {reference_audio}")
+        if control_audio is not None and not control_audio.is_file():
+            raise WorkerError(f"Control audio not found: {control_audio}")
+        if control_audio is not None and control != "prosody_control":
+            raise WorkerError("A separate control audio is only valid for the prosody_control experiment")
         fields = {
             "prompt": prompt,
             "lyrics": lyrics,
@@ -92,6 +97,11 @@ class NativeWorkerClient:
             reference=(
                 ("reference_audio", reference_audio.name, reference_audio.read_bytes(), "audio/wav")
                 if reference_audio is not None
+                else None
+            ),
+            extra_control=(
+                ("control_audio", control_audio.name, control_audio.read_bytes(), "audio/wav")
+                if control_audio is not None
                 else None
             ),
         )
@@ -139,6 +149,7 @@ class NativeWorkerClient:
             "x-diffsynth-model-version",
             "x-diffsynth-negative-prompt-source",
             "x-diffsynth-control",
+            "x-diffsynth-control-audio",
             "x-diffsynth-bpm",
             "x-diffsynth-keyscale",
             "x-diffsynth-timesignature",
@@ -196,6 +207,7 @@ def _multipart(
     mime: str,
     *,
     reference: tuple[str, str, bytes, str] | None = None,
+    extra_control: tuple[str, str, bytes, str] | None = None,
 ) -> tuple[bytes, str]:
     boundary = f"----hum2midi-native-{uuid.uuid4().hex}"
     chunks: list[bytes] = []
@@ -211,6 +223,8 @@ def _multipart(
     file_parts = [(name, filename, data, mime)]
     if reference is not None:
         file_parts.append(reference)
+    if extra_control is not None:
+        file_parts.append(extra_control)
     for file_name, file_filename, file_data, file_mime in file_parts:
         chunks.extend(
             [
