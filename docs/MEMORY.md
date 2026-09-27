@@ -231,3 +231,40 @@
 继续固定全部参数和 CFG4，只把Control分离轨从 `drums,bass` 扩展为官方示例完整伴奏组 `drums,bass,other` 后，Pitch50/起音/Chroma/CLAP回升到0.3953/0.5787/0.6066/0.4656，接近原基线的旋律、节奏代理，同时Funk CLAP高0.0449。输出10.48秒，分离2.0秒，总请求99.547秒，峰值预留15.873GB；AST人声/哼唱概率0.002489/0.000394。该条件构造目前是最平衡的自动筛查候选，但仍须人工确认听感，代理指标不能证明“用户能听出原旋律”或“更惊艳”。调试页已缩为三条：seed7基线、CFG4鼓/贝斯 Control、CFG4鼓/贝斯/other Control；不得把实验自动替换正式 Prosody-only 链路。
 
 为避免短 Reference 实验失败后留下懒加载 CUDA 权重，Worker 异常路径现在会释放 Pipeline 对象、执行垃圾回收与 `torch.cuda.empty_cache()`；`b6d66cc` 已推送并由 daemon 自动部署。单独 Control 音频、官方鼓/贝斯分离与正负 CFG 分支选项已在后续 Worker 实验接口中实现，相关推理分别使用 `35bc823`、`5b10b52`、`9851d85` 构建；客户端单测3项通过。此能力仍仅用于显式 A/B。
+
+后续只改变随机种子做对照：保持原始 Prosody、同一 seed7 Funk Control 音频、官方 `drums,bass,other` 分离、双 CFG 分支、CFG4、50步和完全相同的 prompt/negative prompt，将 seed7 改为 seed42。生成耗时110.352秒、峰值reserved 15.873GB、输出10.480秒。相同评估脚本复核 seed7 基线为 onset 0.5787、chroma 0.6066、Pitch50约0.3953、Funk CLAP 0.4656；seed42为 onset 0.5659、chroma 0.2128、Pitch50约0.1731、Funk CLAP 0.4007。seed42虽有明显音色/频谱变化，但旋律代理和风格匹配均较差，拒绝替代 seed7。实验脚本改为只保存单条结果记录，不再自动将候选插入试听页；候选须评估后手动纳入，避免较差结果覆盖当前试听对照。
+
+公网 502 排查记录：Nginx error log 显示对 `127.0.0.1:18000` 的 `connect() failed (111: Connection refused)`，即公网反向隧道当时没有监听；开发机 tunnel log 记录 SSH 被远端关闭及 connection reset，`start_hum2midi_tunnel.ps1` 已有 5 秒重连循环，00:58 后恢复连接。当前开发机 FastAPI 与 SSH `-R 127.0.0.1:18000:127.0.0.1:8000` 隧道均在运行，公网根页、`/hum2midi/`、试听页、健康接口和试听音频均返回 HTTP 200，GPU Worker 健康。这类 502 位于公网 Nginx 到开发机隧道之间，与模型推理无关。
+
+为继续寻找“更强 Funk 质感且仍保留哼唱”的条件组合，加入显式 Control 音轨跨来源混合实验，Worker build `945158d` 已由 daemon 自动拉取，正式路径不变。强 Funk 参考 `experiment_funk_payoff_cfg5.wav` 自身 Funk CLAP 0.4634，但直接用它的 drums+bass 做 Control 时输出 Pitch50仅0.0078、CLAP0.3988，说明它的律动参考带偏了旋律。采用模型内官方分轨后，按可调能量权重把该来源 drums+bass 与旋律更贴合的 seed7 来源 `other` 合成 Control，再同原始哼唱 Prosody 一起放到两条 CFG 分支：`other=35%` 得 Pitch50 0.4703、onset0.6291、chroma0.6816、Funk CLAP0.2587；`other=15%` 得 Pitch50 0.4367、onset0.5888、chroma0.6609、CLAP0.2094。相比当前 DBO seed7 基线（0.3953/0.5787/0.6066/0.4656），两个混合版都更贴旋律代理、频谱亮度变高，但 CLAP 明显下降，不能据此断言风格更好。15%版 AST 哼唱概率0.000623；两次推理约90–100秒、峰值预留约15.88GB。15%版本已与当前最佳和seed7基线放在试听页供人工判断；自动评估仍标记 creative gates 未全部通过，最终是否更惊艳未验证。
+
+同一 DBO seed7 条件只把 CFG4升为4.5，CLAP0.4625、Pitch50 0.3165、onset0.5737、chroma0.5805；风格未增强且旋律代理略降，因此保留CFG4。只换 seed7为seed42也使 Pitch50/CLAP从0.3953/0.4656降至0.1731/0.4007，已从试听页撤下。A/B脚本改成生成后不自动发布未评估候选。
+
+在强 Funk 鼓/贝斯 Control 与对齐 `other` 的混合比例上再测5%：原始 Prosody/Prompt/seed7/CFG4/50步不变。结果 Pitch50 0.4096、onset0.4533、chroma0.5715、Funk CLAP0.3369；谱质心/带宽/rolloff/ZCR分别是原哼唱的1.698/1.252/1.934/1.712倍，AST人声/哼唱概率0.001789/0.000825。它比当前DBO胜出候选更明亮、更有瞬态，Pitch50近似略高，旋律色度接近，但起音代理和CLAP都低于基线；音频评估的各项单独 Creative gate 通过，合成 overall diagnostic 仍未通过，因此只作为候选试听。试听页现显示：DBO平衡版、5%混合版、原seed7 Control+Prosody基线三条。还没有用户听感确认，目标仍未完成。
+
+
+## 2026-09-28：Control 混合权重 3% A/B 与公网隧道复核
+
+在既有显式 Control+Prosody A/B 上继续固定原始 Prosody、seed7、CFG4、50步、双 CFG 分支和详细 Funk Prompt，仅把强 Funk 参考的 drums/bass 与旋律对齐参考的 other 按 3% 能量权重混合。推理92.0秒、峰值 reserved 显存15.881GB，输出10.480秒。自动代理：Pitch50约0.3979、onset相关0.5573、chroma相关0.5177、Funk CLAP0.3702；5%详细 Prompt 对应约0.4096/0.4533/0.5715/0.3369，当前DBO平衡版约0.3953/0.5787/0.6066/0.4656。3%相对5%提高起音代理和CLAP，但相对DBO仍降低起音、色度与CLAP；谱质心/带宽/rolloff/ZCR分别为输入的1.832/1.262/2.046/2.226倍，AST人声/哼唱概率0.005737/0.002703。该候选适合人工试听对比，不能判定为胜出；已放入三项试听页替换较弱的5%详细Prompt版本，保留DBO平衡版与5%短Prompt版。正式 Prosody-only 链路不变。
+
+本次公网502复核：Nginx error log 记录过 `127.0.0.1:18000` connection refused；开发机 `native.api` 的8000端口正常，反向 SSH `-R 127.0.0.1:18000:127.0.0.1:8000` 当前常驻并恢复监听。远端上游直连、Nginx配置检查均通过，公网首页及健康接口连续5轮HTTP 200。故障点是开发机到公网机的反向隧道短暂中断，非Worker；当前已恢复。
+
+
+## 2026-09-28：3% Control Prompt 与 CFG 纵向对照
+
+固定真实输入、原始 Prosody、两份 Control 来源、3% other 能量混合、seed7、50步和双 CFG 分支，先比较三种正向 Prompt。600字符的详细 Funk 编曲 Prompt 得 Pitch50/onset/chroma/CLAP约0.3979/0.5573/0.5177/0.3702；251字符开放描述为0.5142/0.6058/0.6593/0.3098；279字符、点名clavinet/贝斯/鼓且开放和声回应的描述为0.5142/0.6077/0.6119/0.3097。较短提示更保留旋律与起音，但风格 CLAP 明显低；仅保留少数乐器锚点未恢复风格得分。三者输出均10.480秒，人声/哼唱 AST 较低。这些声学/语义代理不评“惊艳”，短Prompt版本保存在文件中但没有挤进试听页。
+
+随后固定3% Control及600字符详细 Prompt，仅将CFG4升至5：推理91.631秒、峰值reserved15.889GB；Pitch50/onset/chroma/CLAP约0.3979/0.4779/0.5623/0.3454。谱质心/带宽/rolloff/ZCR比输入约1.853/1.319/2.135/1.949，三个频谱类创造性门槛通过，但CLAP低于CFG4的0.3702，起音相关从0.5573降到0.4779；频谱和CLAP不能代替听感，也不能宣称新候选胜出。试听页现在提供DBO基线及同一3%条件下CFG4/CFG5的详细Prompt对照；正式 Prosody-only 链路未改。
+
+
+## 2026-09-28：Beats+Prosody、CFG 与 Negative Prompt 复核
+
+为了让模型自由编曲、同时保留原哼唱，按 [DiffSynth-Music 官方 Beats 示例](https://diffsynth-studio-doc.readthedocs.io/en/latest/Model_Details/DiffSynth-Music.html) 用 Control `model_id=0` 的点击轨与原始 Prosody `model_id=1` 组合；点击信号沿用官方 [generate_click 实现](https://github.com/modelscope/DiffSynth-Studio/blob/main/diffsynth/utils/music_tools/click.py) 的1kHz/10ms指数衰减脉冲，100 BPM，并将第一个 click 对齐到录音首个稳定起音1.06秒。正向分支包含 click+Prosody，负向分支只含 Prosody（官方示例用零值 click，当前 Worker 接口没有逐分支独立 Control 音频，因此明确记录为近似实验）。CFG4 输出66.394秒、peak reserved15.838GB；音频代理 Pitch50/onset/chroma/CLAP为0.0504/0.2337/0.3078/0.3368，谱质心比2.818。它更像完全新生成的 Funk，原哼唱旋律明显丢失，不进入试听精选页。固定其它条件只把CFG降至2，生成66.072秒、同样peak15.838GB；Pitch50/onset/chroma/CLAP降至0.0336/0.1610/0.1688/0.3151，仍未找回旋律，说明当前样本不适合此固定节拍Control构造，继续调这个条件没有依据。
+
+回到同一 DBO seed7 Control 与CFG4，只从 Negative Prompt 删除“unrelated melody”，保留人声/底噪/过长前奏/混音质量清理词。结果与原Negative几乎持平：Pitch50/onset/chroma/CLAP为0.3941/0.5830/0.5953/0.4638；原DBO基线为0.3953/0.5787/0.6066/0.4656。该词不是当前风格不足的主因。三项结果（DBO、去掉该词、3% cross-source other）已整理到公网试听页，补齐正负 Prompt 的中译；公开页 `/hum2midi/official`、manifest 和三段音频均HTTP200。整体仍待人工试听判断，没有宣称创意或目标完成。
+
+## 2026-09-28：CFG 负向分支 Control 语义对照
+
+针对 Control + Prosody 的风格强度不足，固定原始哼唱 Prosody、混合 Control（强 Funk 输出的 drums/bass + 原 DBO 输出的 other，3% 权重）、同一 Funk Prompt、negative prompt、seed7、50步，只将 Control 从正负两支同值改为正向分支有 Control、负向分支完全省略 Control。先因实验配方继承历史 JSON 错用了 CFG4.5，后补 CFG4 严格复跑。CFG4.5 结果10.48秒、约67.2秒、peak reserved15.873GB；Pitch50/onset/chroma为0.3243/0.5215/0.3139，CLAP同一文本评估单独跑为0.1086。CFG4 严格复跑约62.0秒、peak reserved15.861GB；Pitch50/onset/chroma为0.4406/0.4948/0.3853，CLAP0.1755。对照3%双支 Control CFG4的0.3979/0.5573/0.5177、CLAP0.3702，正向-only略提高Pitch50，但节奏、色度和风格代理更差；该条件不放入试听精选页。实验脚本默认 CFG 修正为显式4，避免再从历史 Control 配方误读4.5。
+
+重新查官方 Quick Start，Beats 示例的正向输入是 click Control，负向输入仍保留 Control adapter 但音频设为零（`beats * 0`）；此前 Worker 的 `positive` 模式把负向 Control adapter 整条省略，并非官方零条件方式。仅为显式 A/B 新增 `control_audio_branches=zero`：正向分支用混合 Control + 原始 Prosody，负向分支用 `zeros_like(Control)` + 相同 Prosody；正式 Prosody-only 链路不变。Worker 客户端、表单校验、Condition 构造和实验元数据均支持该选项，并记录正负分支的 model id；相关编译与 Worker client 单测5项通过。尚需推送后等 daemon 部署，再对同一3%双支基线做 zero-negative CFG4/50 steps 实测；没有听感验证前不判断胜负。[官方 Quick Start](https://diffsynth-studio-doc.readthedocs.io/en/latest/Model_Details/DiffSynth-Music.html)

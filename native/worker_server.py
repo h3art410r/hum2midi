@@ -349,10 +349,10 @@ def generate(
         raise HTTPException(400, "control_audio_tracks requires a separate control_audio")
     if selected_control_tracks and control != "prosody_control":
         raise HTTPException(400, "control_audio_tracks is only valid for the prosody_control experiment")
-    if control_audio_branches not in {"positive", "both"}:
-        raise HTTPException(400, "control_audio_branches must be 'positive' or 'both'")
-    if control_audio_branches == "both" and control_audio is None:
-        raise HTTPException(400, "control_audio_branches='both' requires a separate control_audio")
+    if control_audio_branches not in {"positive", "zero", "both"}:
+        raise HTTPException(400, "control_audio_branches must be 'positive', 'zero', or 'both'")
+    if control_audio_branches in {"zero", "both"} and control_audio is None:
+        raise HTTPException(400, "control_audio_branches='zero' or 'both' requires a separate control_audio")
     if any(item not in {"drums", "bass", "other"} for item in selected_control_tracks):
         raise HTTPException(400, "control_audio_tracks may contain drums, bass, and/or other")
     if control_audio_other is not None and not selected_control_tracks:
@@ -555,11 +555,16 @@ def generate(
                 {"model_id": 0, "audio": control_waveform},
                 {"model_id": 1, "audio": prosody},
             ]
-            negative_control_audio = control_waveform if control_audio is not None else waveform
+            if control_audio is not None and control_audio_branches == "zero":
+                # Match the official Beats CFG pattern: retain the Control
+                # adapter in the negative branch but provide a zero waveform.
+                negative_control_audio = torch.zeros_like(control_waveform)
+            else:
+                negative_control_audio = control_waveform if control_audio is not None else waveform
             negative_template_inputs = [
                 *(
                     [{"model_id": 0, "audio": negative_control_audio}]
-                    if control_audio is None or control_audio_branches == "both"
+                    if control_audio is None or control_audio_branches in {"both", "zero"}
                     else []
                 ),
                 {"model_id": 1, "audio": prosody},
@@ -571,6 +576,7 @@ def generate(
             control=control,
             memory_profile=MEMORY_PROFILE,
             template_models=','.join(str(item["model_id"]) for item in template_inputs),
+            negative_template_models=','.join(str(item["model_id"]) for item in negative_template_inputs),
         )
         result = TEMPLATE(
             PIPE,

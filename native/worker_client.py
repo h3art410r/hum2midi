@@ -88,10 +88,10 @@ class NativeWorkerClient:
             raise WorkerError("Control track extraction requires a separate control_audio")
         if control_audio_tracks and control != "prosody_control":
             raise WorkerError("Control track extraction is only valid for the prosody_control experiment")
-        if control_audio_branches not in {"positive", "both"}:
-            raise WorkerError("Control audio branches must be 'positive' or 'both'")
-        if control_audio_branches == "both" and control_audio is None:
-            raise WorkerError("Control audio in both CFG branches requires a separate control_audio")
+        if control_audio_branches not in {"positive", "zero", "both"}:
+            raise WorkerError("Control audio branches must be 'positive', 'zero', or 'both'")
+        if control_audio_branches in {"zero", "both"} and control_audio is None:
+            raise WorkerError("Control audio in negative CFG branch requires a separate control_audio")
         fields = {
             "prompt": prompt,
             "lyrics": lyrics,
