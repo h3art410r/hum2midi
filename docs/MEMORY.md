@@ -162,3 +162,60 @@
 - Native 后端规范化现在明确选择双声道中能量更高的一侧，再复制为两个相同声道；不再让 `ffmpeg -ac 2` 把有效哼唱与弱/噪声声道平均，符合官方 Prosody 输入适配和用户要求。
 - 新 Worker 首轮真实冒烟发现当前 DiffSynth 版本的 `LoadMultiTrackAudio` 会通过 `torchaudio` 要求可选 TorchCodec。已加入仅针对该缺失依赖的 soundfile fallback：保持 `[channels, samples]`、48kHz 和 3840 对齐后继续走官方 `extract_prosody` 与 `TemplatePipeline`，不改模型内部。真实输入单步测试成功：Prosody 0.357 秒、推理 33.305 秒、总计 33.674 秒、峰值 reserved 8.969 GiB，输出 10.480 秒 WAV。
 - 新 Worker 默认 50 steps 的正式双风格基线任务 `f6d12de8f1d542b29ea0ec64dfb50899` 已完成：真实输入 10.516 秒、Prosody 对齐 10.480 秒；Funk Worker 总计 42.955 秒、推理 41.494 秒、峰值 reserved 8.924 GiB；Lo-fi 总计 39.589 秒、推理 39.222 秒、峰值 reserved 8.969 GiB。两个输出均为 48kHz 双声道 10.480 秒 WAV，前端可按变体独立展示。
+
+## 2026-09-28：主钩子辨识度与 Funk 编曲力度
+
+- 固定真实输入 `debug_recent_input.wav`、seed42/CFG4/50步，先比较 Prosody-only 与显式 Control+Prosody。相同 prompt 将哼唱改写成器乐 Funk，要求旋律与节奏贯穿；CLAP Funk 分别 0.4144/0.3190，Pitch50 分别 0.0078/0.0943。AST 两条人声很低，但声学评估不能替代用户盲听。
+- 在 Control+Prosody 下把主钩子指定为清晰 Clavinet、保留原旋律顺序和停顿，伴奏改为切分贝斯、鼓、吉他、灵魂和声及铜管回应。相较一般的“重制 Funk”提示，CLAP 由 0.319 升至 0.351、Pitch50 由 0.094 升至 0.287；覆盖率 0.618。AST 哼唱 0.0008、人声 0.0295。该候选约 78 秒、峰值预留显存 15.879GB，已放进 `/official` 试听实验区。
+- 另一条更自由地重写旋律、保留轮廓/标志音程/重音的提示，Pitch50 0.302、CLAP 0.308，没有胜过主钩子方案的综合指标。
+- 对清晰主钩子方案只把 CFG4 改为5：CLAP 从0.351升到0.463，但 Pitch50从0.287降到0.158、起音相关从0.667降到0.478、Chroma从0.381降到0.266。CFG5让文本风格更强，却牺牲原旋律的技术保持；目前CFG4更平衡。两条 AST 人声标签都低。
+- 同 prompt/seed 下增加 CFG4.5：CLAP0.406、Pitch50 0.221、起音相关0.612、Chroma0.402，介于 CFG4 与 CFG5。风格和旋律音高/节奏之间呈现可量化的 Pareto 权衡；不要只按 CLAP 选参数，需并排盲听。
+- 官方 DiffSynth-Music 文档/源码表明省略 `bpm`、`timesignature`、`keyscale` 时会注入 100、4、B minor 文本元数据。为避免默认 B minor 拉偏哼唱，Worker 增加了可选官方 metadata 字段（默认未变），commit `ae2acb1` 已 push 并由 daemon 自动更新到该 build。
+- 本音频起音估速约 103 BPM；chroma key profile 最偏 E minor 0.395，其相对大调 G major 0.337，模式判断仍有歧义。仅改变 keyscale=B minor默认→E minor，保持 CP/seed42/CFG4.5/50步/prompt相同：Pitch50 0.221→0.337，median误差170→40 cents，P90 1130→270 cents；但 CLAP Funk 0.406→0.338，起音相关0.612→0.572，Chroma近似不变0.402→0.397。说明调性元数据帮助音高贴合、却可能减弱Funk风格；最终听感未确认，不能自动选用。
+- 当前领先方向是“主旋律有清晰乐器承载 + 围绕旋律重写完整 Funk 编曲”；继续一次只变一个变量。单音 Pitch50 和 CLAP 都不能证明听众认出了原哼唱或认为作品惊艳，最终需人工试听打分。
+
+## 2026-09-28：Control+Prosody 风格/旋律后续实验
+
+- 真实输入固定为 `native/static/official/debug_recent_input.wav`，Worker build `ae2acb1`、RTX 5060 Ti、官方 TemplatePipeline、Control+Prosody 显式 A/B、50步。每条生成约 76–82 秒，峰值 reserved 约15.88GB；正式链路没有改动。
+- 单变量调性/CFG对照：CFG4.5、seed42 下 E minor 的 Pitch50/CLAP 为0.3372/0.3383，G major为0.1899/0.3957；E minor提高CFG到5后 Pitch50/CLAP为0.1848/0.3666，Chroma为0.4789。调性元数据不设为正式默认。
+- 随机种子影响明显。主钩子 Prompt 下 CFG4.5/seed42 的 Pitch50、起音相关、Chroma、Funk CLAP为0.2209/0.6118/0.4023/0.4064；只改 seed7 后为0.6434/0.7221/0.6381/0.3285。seed7/CFG5 为0.6421/0.6616/0.6651/0.3246，升CFG未带来CLAP增益。
+- 新开放式再编曲 Prompt 保留原钩子的轮廓、节奏重音、乐句和停顿，允许重新编曲，不再要求音符顺序逐音完全相同；负向词缩短为清理原始哼唱、人声、底噪、无关旋律、长前奏、浑浊低音及削波。同一 Prompt 的seed42诊断为Pitch50/起音/Chroma/CLAP 0.1486/0.4362/0.3669/0.3731，seed7为0.4173/0.6125/0.6274/0.4207。seed7开放式候选相较旧主钩子seed42/CFG4.5基线四项约为0.417/0.613/0.627/0.421，对比基线的0.221/0.612/0.402/0.406，当前是最值得盲听的平衡候选。
+- 候选 `experiment_funk_hook_recompose_seed7.wav` 已写入 `/official` 实验清单，评估值也在 sidecar JSON 和 manifest。AST 人声/哼唱低，但这些代理分不能证明惊艳度或人耳身份辨认；需用户试听后才能决定是否作为候选方案。
+- 同一开放式 Prompt、E minor、CFG4.5、50步继续只采样 seed17/123：seed17 的 Pitch50/起音/Chroma/CLAP为0.0013/0.5595/0.2113/0.4127，频谱变化更大但音高身份几乎丢失；seed123为0/0.2317/0.3622/0.292。seed7 的0.4173/0.6125/0.6274/0.4207仍是本组唯一的综合平衡样本，证实单纯换seed不是稳定解。
+- 固定seed7，只把正向词改为更具体的律动组和段落爆发描述（切分贝斯、ghost-note鼓组、Wah吉他、铜管/风琴重音、乐队收尾），Pitch50/起音/Chroma/CLAP为0/0.2715/0.2302/0.3765；虽然频谱更器乐化，但明显丢失了输入对应。乐器/制作细节写得更强不等于更好的风格化。上述seed17、seed123和强律动Prompt结果已列入官方调试页，当前最佳平衡仍是开放式Prompt seed7，需用户试听判定记忆点与原曲身份。
+
+## 2026-09-28：旋律主钩子保留与 Prosody-only CFG 对照
+
+- 项目负责人要求正式链路和后续对照都不再用 Control + Prosody。`AGENTS.md` 与 `docs/SPEC.md` 已同步：正式生成只走官方 Prosody；除非负责人重新明确授权，不再启用 Control+Prosody。Worker 本进程未重启，当前仍为官方低显存 BF16、TemplatePipeline，build `ae2acb1`。
+- 检查发现旧正式提示词相互冲突：正向要求“freely re-compose the notes”，负向排斥“a literal copy of the hummed tune”，并要求“the source singer must not be recognizable”。它会把音符重写、把人声身份去掉，不能清楚表达“旋律保留、编曲改造”。已重写 `native/prompts.py`：同一旋律走向、节奏重音、乐句和停顿作为贯穿主钩子；风格变化放在乐器、律动、和声、回应句及动态；不混入原始录音或人声。
+- 用真实录音 `native/static/official/debug_recent_input.wav` 做4条 Prosody-only 输出：seed42、50步、E minor/BPM 等元数据均用模型默认，只对比 CFG4 与 CFG5，Worker 实际推理各约42–44秒。结果已放入 `/official` 实验区，并用新提示词 CFG4 结果刷新页面主试听卡；实验页缩减为4条最新候选，不展示旧 Control+Prosody 条目。
+- 诊断值（仅供定位，不代表听感通过）：Funk CFG4 的 Pitch50/起音/Chroma/Funk CLAP 为0.0155/0.1207/0.3522/0.4173；Funk CFG5 为0/0.0992/0.2793/0.3373。Lo-fi CFG4 为0.0052/0.2596/0.3735/0.1628；Lo-fi CFG5 为0.0052/0.3384/0.5410/0.1786。四条 AST 哼唱概率均低于0.0014。CFG5 在 Funk 没有改善，在 Lo-fi 的节奏/Chroma代理指标略好；Pitch50 对复调混音不可靠，CLAP也不是惊艳度量表。
+- 页面公网验证：`/hum2midi/official`、新提示词 API、4条实验清单和全部4个 WAV 均 HTTP 200。仅重启本地 FastAPI 以加载新提示词，未重启 Worker。
+- 当前客观证据尚不能证明用户听得出原始哼唱或觉得“惊艳”；需并排听 Funk/Lo-fi 的 CFG4 与 CFG5，再据最好/最差具体听感继续迭代。
+
+## 2026-09-28：Prosody-only 随机种子搜索
+
+固定新提示词、官方 Prosody、CFG4、50步和真实输入 `debug_recent_input.wav`，每种风格只改变 seed，测试 seed7 和 seed123；新增 4条生成各约45秒，未使用 Control 或 Control+Prosody。
+
+与 seed42 CFG4 基线相比，Funk seed7 的 Pitch50/起音/Chroma/CLAP 为0.0478/0.2224/0.2953/0.2824，旋律和节奏代理略好但风格相似分更低；seed123为0.0013/0.1992/0.1852/0.3898。Lo-fi seed7 为0.0685/0.3358/0.3129/0.2256，相较seed42的0.0052/0.2596/0.3735/0.1628，音高/起音/CLAP代理上升但Chroma下降；seed123为0.0401/0.2939/0.1749/0.0843。
+
+这组结果没有出现一个客观上同时强风格和强旋律的赢家，说明只靠seed采样不是稳定解；当前调试页精选 seed42 与 seed7 的四条结果让用户盲听比较，seed123留作研究记录。CLAP、Pitch50和复调上的Chroma/起音值不等于听众能认出旋律或觉得惊艳；目标仍待人工试听确认。
+
+## 2026-09-28：录音前置空白的起点对齐实验
+
+检查同一份真实录音 `debug_recent_input.wav` 的 20ms RMS 包络，首个稳定哼唱起音约在1.04秒。原始 Prosody 条件包含约1秒录音前置空白，而正向提示词要求立刻开始，存在“模型先编开头、主旋律后进入”的时间语义冲突。
+
+做了两个官方 Prosody-only A/B（Funk、Lo-fi）：seed42、CFG4、50步、提示词与负向词固定。只把检测到的0.98秒前置空白从开头移到末尾，前面留60ms攻击余量；没有拉伸、调音或改变乐句内部的相对节奏。条件波形仍为10.516秒，官方3840样本切齐后输出10.480秒。Worker 推理约48.2秒/45.8秒，未重启Worker。
+
+粗略代理对比（Pitch50对复调混音不可靠）：Funk原条件的起音/Chroma/CLAP为0.1207/0.3522/0.4173，左移后为0.2930/0.2742/0.3739；起音相关改善、风格相似度略降。Lo-fi原条件为0.2596/0.3735/0.1628，左移后为0.3054/0.5231/0.2142，三项均改善。两条的AST哼唱概率分别为0.000156/0.000918，残留人声检测较低。该A/B让Lo-fi候选成为值得优先试听的下一条，但不能证明用户听得出原旋律或觉得更惊艳。
+
+已把两种风格的原始条件/起点对齐条件四条结果放进 `/official` 实验页，页面对照固定为同输入、同prompt、同seed、同CFG/steps，只改变前置空白的位置。是否采纳到正式预处理，等用户确认听感后再决定。
+
+## 2026-09-28：分句、短 Prompt 与官方 Negative Prompt 消融
+
+- 乐句静音检测得到首句4.08秒、停顿0.56秒、次句有效音频4.32秒。修正实验脚本，避免把首音对齐后移至录音末尾的1.52秒人为静音送入第二句；对两句分别用官方 Prosody-only、seed42/CFG4/50步生成，再拼回10.48秒。
+- 分句 Funk 相比整段原始输入基线，起音相关0.1207→0.2560，Chroma 0.3522→0.3488，Funk CLAP 0.4173→0.3836，人声检测0.00149→0.00542；分句 Lo-fi 为起音0.2596→0.3052、Chroma 0.3735→0.1982、CLAP0.1628→0.1784、人声检测0.00264→0.06457。分句没有整体胜出，Lo-fi 明显退化，不进入正式链路。
+- 把正向 prompt 压缩成更开放的短描述（固定首音对齐条件、负向词、seed/CFG/steps）后，Funk/Lo-fi 起音代理升至0.3438/0.3908，但风格 CLAP 降至0.1981/0.1295，Chroma降至0.2420/0.3299；说明仅删掉编曲细节并不能取得“更有风格且保旋律”。不采纳为正式 prompt。
+- 固定当前正向词与其余参数，把自定义清理型 negative prompt 换成 `pipe.default_negative_prompt`：Funk 的起音/Chroma/CLAP从0.2930/0.2742/0.3739变为0.1952/0.4293/0.3460；Lo-fi从0.3054/0.5231/0.2142变为0.1881/0.3470/0.1389。官方默认值没有总体优势；暂时保留项目自定义 negative prompt。上述均为代理指标，不代表听觉通过。
+- 新读 DiffSynth-Music 官方 Quick Start：`model_id=1` Prosody 用同一旋律波形同时传正、负模板条件；`model_id=2` Reference 是官方音色参考条件，Quick Start 示例只传正向 `template_inputs`，负向文本为空。论文说明各模板 KV memory 可组合，但没有提供 Prosody+Reference 的固定组合示例。
+- 为直接检验“Prosody保旋律 + Reference增音色/风格”已在 Worker 增加一个显式 `prosody_reference` 实验模式及第二音频上传参数；默认/正式 API 仍只走 Prosody，不使用 Control。调试脚本用本项目先前生成的同风格输出作 Reference，先跑1步显存与协议冒烟，再决定是否运行50步 A/B；当前变更尚未提交/推送，实验结果待定。Reference 模式需要额外模板显存，若单步峰值逼近16GB即停止。

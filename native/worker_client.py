@@ -58,12 +58,15 @@ class NativeWorkerClient:
         cfg_scale: float,
         steps: int,
         control: str = "prosody",
+        reference_audio: Path | None = None,
         bpm: float | None = None,
         keyscale: str | None = None,
         timesignature: str | None = None,
     ) -> dict[str, object]:
         if not source.is_file():
             raise WorkerError(f"Input audio not found: {source}")
+        if reference_audio is not None and not reference_audio.is_file():
+            raise WorkerError(f"Reference audio not found: {reference_audio}")
         fields = {
             "prompt": prompt,
             "lyrics": lyrics,
@@ -86,6 +89,11 @@ class NativeWorkerClient:
             source.name,
             source.read_bytes(),
             "audio/wav",
+            reference=(
+                ("reference_audio", reference_audio.name, reference_audio.read_bytes(), "audio/wav")
+                if reference_audio is not None
+                else None
+            ),
         )
         started = time.perf_counter()
         try:
@@ -180,7 +188,15 @@ class _Response:
     headers: dict[str, str]
 
 
-def _multipart(fields: dict[str, str], name: str, filename: str, data: bytes, mime: str) -> tuple[bytes, str]:
+def _multipart(
+    fields: dict[str, str],
+    name: str,
+    filename: str,
+    data: bytes,
+    mime: str,
+    *,
+    reference: tuple[str, str, bytes, str] | None = None,
+) -> tuple[bytes, str]:
     boundary = f"----hum2midi-native-{uuid.uuid4().hex}"
     chunks: list[bytes] = []
     for key, value in fields.items():
@@ -192,14 +208,18 @@ def _multipart(fields: dict[str, str], name: str, filename: str, data: bytes, mi
                 b"\r\n",
             ]
         )
-    chunks.extend(
-        [
-            f"--{boundary}\r\n".encode(),
-            f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'.encode(),
-            f"Content-Type: {mime}\r\n\r\n".encode(),
-            data,
-            b"\r\n",
-            f"--{boundary}--\r\n".encode(),
-        ]
-    )
+    file_parts = [(name, filename, data, mime)]
+    if reference is not None:
+        file_parts.append(reference)
+    for file_name, file_filename, file_data, file_mime in file_parts:
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode(),
+                f'Content-Disposition: form-data; name="{file_name}"; filename="{file_filename}"\r\n'.encode(),
+                f"Content-Type: {file_mime}\r\n\r\n".encode(),
+                file_data,
+                b"\r\n",
+            ]
+        )
+    chunks.append(f"--{boundary}--\r\n".encode())
     return b"".join(chunks), f"multipart/form-data; boundary={boundary}"

@@ -246,7 +246,8 @@ def health() -> dict[str, object]:
         "status": "ok" if MODEL_READY else "starting",
         "provider": "DiffSynth-Music",
         "control": os.getenv("NATIVE_DEFAULT_CONTROL", "prosody"),
-        "supported_controls": ["prosody", "control", "prosody_control"],
+        "supported_controls": ["prosody", "control", "prosody_control", "prosody_reference"],
+        "experimental_controls": ["control", "prosody_control", "prosody_reference"],
         "execution": "official_prosody_quick_start",
         "model_id": MODEL_ID,
         "build": BUILD,
@@ -273,6 +274,7 @@ def debug_logs(since: int = 0, limit: int = 200, request_id: str = "") -> dict[s
 @app.post("/v1/generate")
 def generate(
     audio: UploadFile = File(...),
+    reference_audio: UploadFile | None = File(default=None),
     prompt: str = Form(...),
     negative_prompt: str = Form(""),
     lyrics: str = Form(""),
@@ -289,8 +291,12 @@ def generate(
     started = time.perf_counter()
     if TOKEN and authorization != f"Bearer {TOKEN}":
         raise HTTPException(401, "Invalid worker token")
-    if control not in {"prosody", "control", "prosody_control"}:
-        raise HTTPException(400, "Native Worker supports prosody, control, and prosody_control conditioning")
+    if control not in {"prosody", "control", "prosody_control", "prosody_reference"}:
+        raise HTTPException(400, "Unsupported conditioning mode")
+    if control == "prosody_reference" and reference_audio is None:
+        raise HTTPException(400, "prosody_reference requires a reference_audio file")
+    if control != "prosody_reference" and reference_audio is not None:
+        raise HTTPException(400, "reference_audio is only valid for the prosody_reference experiment")
     if MEMORY_PROFILE in {"resident_prosody", "resident_official"} and control != "prosody":
         raise HTTPException(400, f"{MEMORY_PROFILE} profile only supports prosody conditioning")
     if not prompt.strip():
@@ -333,6 +339,26 @@ def generate(
         if waveform is None:
             raise RuntimeError("Official LoadMultiTrackAudio returned no waveform")
         prosody = extract_prosody(waveform)
+        reference_waveform = None
+        if control == "prosody_reference":
+            assert reference_audio is not None
+            reference_payload = reference_audio.file.read()
+            if not reference_payload:
+                raise HTTPException(400, "reference_audio is empty")
+            reference_path = WORK_DIR / f"{request_id}-reference.wav"
+            reference_path.write_bytes(reference_payload)
+            # Use the same 48kHz and 3840-sample alignment contract as source
+            # audio while keeping reference timbre/style separate from prosody.
+            reference_waveform = _load_wav_without_torchcodec(
+                reference_path, division_factor=3840
+            )
+            _log(
+                "REFERENCE_AUDIO_SAVED",
+                request_id,
+                bytes=len(reference_payload),
+                filename=reference_audio.filename or "reference.wav",
+                waveform_shape=tuple(reference_waveform.shape),
+            )
         duration = prosody.shape[1] / 48000
         conditioning_elapsed = time.perf_counter() - conditioning_started
         _log(
@@ -355,6 +381,20 @@ def generate(
         elif control == "control":
             template_inputs = [{"model_id": 0, "audio": waveform}]
             negative_template_inputs = [{"model_id": 0, "audio": waveform}]
+        elif control == "prosody_reference":
+            assert reference_waveform is not None
+            template_inputs = [
+                {"model_id": 1, "audio": prosody},
+                {"model_id": 2, "audio": reference_waveform},
+            ]
+            # The official Prosody example supplies its condition to both CFG
+            # branches; the Reference example only supplies template_inputs.
+            # Preserve that distinction in this explicit composition so CFG
+            # keeps the source melody anchored while reference style is a
+            # positive-branch creative condition.
+            negative_template_inputs = [
+                {"model_id": 1, "audio": prosody},
+            ]
         else:
             # The paper describes joint conditioning as concatenating the
             # independently encoded Control and Prosody KV memories. Keep the
