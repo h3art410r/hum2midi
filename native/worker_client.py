@@ -58,6 +58,7 @@ class NativeWorkerClient:
         cfg_scale: float,
         steps: int,
         control: str = "prosody",
+        prosody_source: str = "input",
         reference_audio: Path | None = None,
         control_audio: Path | None = None,
         control_audio_other: Path | None = None,
@@ -90,6 +91,8 @@ class NativeWorkerClient:
             raise WorkerError("Control track extraction is only valid for the prosody_control experiment")
         if control_audio_branches not in {"positive", "zero", "both"}:
             raise WorkerError("Control audio branches must be 'positive', 'zero', or 'both'")
+        if prosody_source not in {"input", "vocals"}:
+            raise WorkerError("Prosody source must be 'input' or 'vocals'")
         if control_audio_branches in {"zero", "both"} and control_audio is None:
             raise WorkerError("Control audio in negative CFG branch requires a separate control_audio")
         fields = {
@@ -99,6 +102,7 @@ class NativeWorkerClient:
             "cfg_scale": str(cfg_scale),
             "steps": str(steps),
             "control": control,
+            "prosody_source": prosody_source,
         }
         if negative_prompt:
             fields["negative_prompt"] = negative_prompt
@@ -185,6 +189,7 @@ class NativeWorkerClient:
             "x-diffsynth-model-version",
             "x-diffsynth-negative-prompt-source",
             "x-diffsynth-control",
+            "x-diffsynth-prosody-source",
             "x-diffsynth-control-audio",
             "x-diffsynth-control-audio-tracks",
             "x-diffsynth-control-audio-other",
@@ -193,6 +198,9 @@ class NativeWorkerClient:
             "x-diffsynth-bpm",
             "x-diffsynth-keyscale",
             "x-diffsynth-timesignature",
+            "x-diffsynth-input-samples",
+            "x-diffsynth-output-samples",
+            "x-diffsynth-output-duration",
         ):
             if headers.get(key):
                 diagnostics[key.removeprefix("x-diffsynth-").replace("-", "_")] = headers[key]

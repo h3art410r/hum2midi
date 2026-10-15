@@ -95,6 +95,36 @@ def _cuda_memory() -> dict[str, float | None]:
     }
 
 
+def _prepare_wav_for_model(
+    path: Path,
+    prepared_path: Path,
+    *,
+    division_factor: int,
+    target_samples: int | None = None,
+) -> tuple[Path, int, int]:
+    """Pad/crop a WAV to the model's block size without changing source length."""
+    data, sample_rate = sf.read(str(path), dtype="float32", always_2d=True)
+    if sample_rate != 48000:
+        raise RuntimeError(f"Native Worker expects 48000 Hz WAV, got {sample_rate}")
+    original_samples = int(data.shape[0])
+    if target_samples is None:
+        model_samples = ((original_samples + division_factor - 1) // division_factor) * division_factor
+    else:
+        model_samples = target_samples
+    if model_samples <= 0 or model_samples % division_factor:
+        raise RuntimeError(f"Invalid model-aligned sample count: {model_samples}")
+    if model_samples == original_samples:
+        return path, original_samples, model_samples
+
+    if original_samples > model_samples:
+        aligned = data[:model_samples]
+    else:
+        aligned = np.pad(data, ((0, model_samples - original_samples), (0, 0)))
+    prepared_path.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(str(prepared_path), aligned, sample_rate, subtype="PCM_16")
+    return prepared_path, original_samples, model_samples
+
+
 def _load_wav_without_torchcodec(path: Path, division_factor: int) -> torch.Tensor:
     """Read the backend's normalized PCM WAV when TorchCodec is unavailable.
 
@@ -120,9 +150,9 @@ def _load_wav_without_torchcodec(path: Path, division_factor: int) -> torch.Tens
 def _model_configs() -> list[ModelConfig]:
     """Official low-VRAM model-card configuration.
 
-    The separator weights are loaded because they are part of the official
-    pipeline definition, even though this humming-only entry point never
-    invokes ``extract_track``.
+    The separator weights are part of the official pipeline definition. The
+    default humming path feeds the source directly to Prosody; the internal
+    ``prosody_source=vocals`` A/B explicitly invokes ``extract_track`` first.
     """
     if MEMORY_PROFILE == "resident_official":
         # This is the official basic-inference shape: no offload fields are
@@ -281,8 +311,11 @@ def health() -> dict[str, object]:
         "provider": "DiffSynth-Music",
         "control": os.getenv("NATIVE_DEFAULT_CONTROL", "prosody"),
         "supported_controls": ["prosody", "control", "prosody_control", "prosody_reference"],
+        "supported_prosody_sources": ["input", "vocals"],
         "experimental_controls": ["control", "prosody_control", "prosody_reference"],
         "execution": "official_prosody_quick_start",
+        "generation_contract": "full_clip_exact_input_samples_v1",
+        "supports_exact_duration": True,
         "model_id": MODEL_ID,
         "build": BUILD,
         "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none",
@@ -321,6 +354,7 @@ def generate(
     cfg_scale: float = Form(4),
     steps: int = Form(50),
     control: str = Form("prosody"),
+    prosody_source: str = Form("input"),
     bpm: float | None = Form(None),
     keyscale: str | None = Form(None),
     timesignature: str | None = Form(None),
@@ -332,6 +366,8 @@ def generate(
         raise HTTPException(401, "Invalid worker token")
     if control not in {"prosody", "control", "prosody_control", "prosody_reference"}:
         raise HTTPException(400, "Unsupported conditioning mode")
+    if prosody_source not in {"input", "vocals"}:
+        raise HTTPException(400, "prosody_source must be 'input' or 'vocals'")
     if control == "prosody_reference" and reference_audio is None:
         raise HTTPException(400, "prosody_reference requires a reference_audio file")
     if control != "prosody_reference" and reference_audio is not None:
@@ -378,6 +414,7 @@ def generate(
         bpm=bpm if bpm is not None else "model_default",
         keyscale=keyscale if keyscale is not None else "model_default",
         timesignature=timesignature if timesignature is not None else "model_default",
+        prosody_source=prosody_source,
         control_audio_branches=control_audio_branches,
         control_audio_tracks=selected_control_tracks,
     )
@@ -388,19 +425,51 @@ def generate(
         assert PIPE is not None and TEMPLATE is not None
         payload = audio.file.read()
         input_path.write_bytes(payload)
-        _log("INPUT_SAVED", request_id, bytes=len(payload), filename=audio.filename or "input.wav")
+        model_input_path, input_samples, model_input_samples = _prepare_wav_for_model(
+            input_path,
+            WORK_DIR / f"{request_id}-input-aligned.wav",
+            division_factor=3840,
+        )
+        _log(
+            "INPUT_SAVED",
+            request_id,
+            bytes=len(payload),
+            filename=audio.filename or "input.wav",
+            original_samples=input_samples,
+            model_samples=model_input_samples,
+            padded_samples=model_input_samples - input_samples,
+        )
         conditioning_started = time.perf_counter()
         loader = LoadMultiTrackAudio(division_factor=3840)
         try:
-            waveform = loader(str(input_path))
+            waveform = loader(str(model_input_path))
         except (ImportError, RuntimeError) as exc:
             if "torchcodec" not in str(exc).lower():
                 raise
             _log("TORCHCODEC_UNAVAILABLE", request_id, fallback="soundfile", error=str(exc))
-            waveform = _load_wav_without_torchcodec(input_path, division_factor=3840)
+            waveform = _load_wav_without_torchcodec(model_input_path, division_factor=3840)
         if waveform is None:
             raise RuntimeError("Official LoadMultiTrackAudio returned no waveform")
-        prosody = extract_prosody(waveform)
+        prosody_waveform = waveform
+        if prosody_source == "vocals":
+            vocal_started = time.perf_counter()
+            prosody_waveform = PIPE.extract_track(waveform, track="vocals")
+            if prosody_waveform is None:
+                raise RuntimeError("Official vocal extraction returned no Prosody source")
+            if prosody_waveform.shape[-1] < model_input_samples:
+                prosody_waveform = torch.nn.functional.pad(
+                    prosody_waveform,
+                    (0, model_input_samples - prosody_waveform.shape[-1]),
+                )
+            elif prosody_waveform.shape[-1] > model_input_samples:
+                prosody_waveform = prosody_waveform[..., :model_input_samples]
+            _log(
+                "PROSODY_VOCAL_TRACK_EXTRACTED",
+                request_id,
+                waveform_shape=tuple(prosody_waveform.shape),
+                elapsed=f"{time.perf_counter() - vocal_started:.3f}s",
+            )
+        prosody = extract_prosody(prosody_waveform)
         reference_waveform = None
         if control == "prosody_reference":
             assert reference_audio is not None
@@ -409,10 +478,15 @@ def generate(
                 raise HTTPException(400, "reference_audio is empty")
             reference_path = WORK_DIR / f"{request_id}-reference.wav"
             reference_path.write_bytes(reference_payload)
+            reference_model_path, _, _ = _prepare_wav_for_model(
+                reference_path,
+                WORK_DIR / f"{request_id}-reference-aligned.wav",
+                division_factor=3840,
+            )
             # Use the same 48kHz and 3840-sample alignment contract as source
             # audio while keeping reference timbre/style separate from prosody.
             reference_waveform = _load_wav_without_torchcodec(
-                reference_path, division_factor=3840
+                reference_model_path, division_factor=3840
             )
             _log(
                 "REFERENCE_AUDIO_SAVED",
@@ -428,14 +502,20 @@ def generate(
                 raise HTTPException(400, "control_audio is empty")
             control_path = WORK_DIR / f"{request_id}-control.wav"
             control_path.write_bytes(control_payload)
+            control_model_path, control_samples, _ = _prepare_wav_for_model(
+                control_path,
+                WORK_DIR / f"{request_id}-control-aligned.wav",
+                division_factor=3840,
+                target_samples=model_input_samples,
+            )
             try:
-                control_waveform = loader(str(control_path))
+                control_waveform = loader(str(control_model_path))
             except (ImportError, RuntimeError) as exc:
                 if "torchcodec" not in str(exc).lower():
                     raise
                 _log("TORCHCODEC_UNAVAILABLE", request_id, fallback="soundfile", error=str(exc))
                 control_waveform = _load_wav_without_torchcodec(
-                    control_path, division_factor=3840
+                    control_model_path, division_factor=3840
                 )
             if control_waveform is None:
                 raise RuntimeError("Control audio loader returned no waveform")
@@ -446,6 +526,8 @@ def generate(
                 filename=control_audio.filename or "control.wav",
                 waveform_shape=tuple(control_waveform.shape),
                 branches=control_audio_branches,
+                original_samples=control_samples,
+                model_samples=model_input_samples,
             )
             if selected_control_tracks:
                 track_started = time.perf_counter()
@@ -467,14 +549,20 @@ def generate(
                     raise HTTPException(400, "control_audio_other is empty")
                 other_path = WORK_DIR / f"{request_id}-control-other.wav"
                 other_path.write_bytes(other_payload)
+                other_model_path, other_samples, _ = _prepare_wav_for_model(
+                    other_path,
+                    WORK_DIR / f"{request_id}-control-other-aligned.wav",
+                    division_factor=3840,
+                    target_samples=model_input_samples,
+                )
                 try:
-                    other_source_waveform = loader(str(other_path))
+                    other_source_waveform = loader(str(other_model_path))
                 except (ImportError, RuntimeError) as exc:
                     if "torchcodec" not in str(exc).lower():
                         raise
                     _log("TORCHCODEC_UNAVAILABLE", request_id, fallback="soundfile", error=str(exc))
                     other_source_waveform = _load_wav_without_torchcodec(
-                        other_path, division_factor=3840
+                        other_model_path, division_factor=3840
                     )
                 if other_source_waveform is None:
                     raise RuntimeError("Secondary Control audio loader returned no waveform")
@@ -488,6 +576,8 @@ def generate(
                     filename=control_audio_other.filename or "control-other.wav",
                     waveform_shape=tuple(other_waveform.shape),
                     elapsed=f"{time.perf_counter() - other_track_started:.3f}s",
+                    original_samples=other_samples,
+                    model_samples=model_input_samples,
                 )
                 mixed, mix_stats = mix_control_contexts(
                     control_waveform.detach().float().cpu().numpy(),
@@ -518,6 +608,8 @@ def generate(
             waveform_shape=tuple(waveform.shape),
             prosody_shape=tuple(prosody.shape),
             duration=f"{duration:.3f}s",
+            original_duration=f"{input_samples / 48000:.6f}s",
+            prosody_source=prosody_source,
             elapsed=f"{conditioning_elapsed:.3f}s",
         )
         if torch.cuda.is_available():
@@ -578,6 +670,11 @@ def generate(
             template_models=','.join(str(item["model_id"]) for item in template_inputs),
             negative_template_models=','.join(str(item["model_id"]) for item in negative_template_inputs),
         )
+        # One full-duration TemplatePipeline call per requested style. Do not
+        # split the source into phrases or concatenate separately generated audio.
+        # At the product's 5–15s range the official music VAE uses at most 376
+        # latent positions, below its default 512-position tile, so tiled=True
+        # decodes this clip as a single VAE tile as well.
         result = TEMPLATE(
             PIPE,
             prompt=prompt,
@@ -601,6 +698,14 @@ def generate(
         peak_reserved = torch.cuda.max_memory_reserved() / 1024**3 if torch.cuda.is_available() else 0.0
         _log("MODEL_INFER_DONE", request_id, elapsed=f"{infer_elapsed:.3f}s", result_shape=tuple(result.shape), peak_allocated_gb=f"{peak_allocated:.3f}", peak_reserved_gb=f"{peak_reserved:.3f}")
         save_started = time.perf_counter()
+        if result.shape[-1] < input_samples:
+            raise RuntimeError(
+                "DiffSynth returned audio shorter than the normalized input; refusing to "
+                "append silence to hide a generation truncation"
+            )
+        if result.shape[-1] > input_samples:
+            result = result[..., :input_samples]
+        saved_samples = int(result.shape[-1])
         sf.write(str(output_path), result.detach().float().cpu().numpy().T, 48000, subtype="PCM_16")
         save_elapsed = time.perf_counter() - save_started
         total_elapsed = time.perf_counter() - started
@@ -609,6 +714,8 @@ def generate(
             request_id,
             elapsed=f"{save_elapsed:.3f}s",
             total=f"{total_elapsed:.3f}s",
+            input_samples=input_samples,
+            output_samples=saved_samples,
             **{
                 f"cuda_{key}": f"{value:.3f}" if value is not None else "none"
                 for key, value in _cuda_memory().items()
@@ -631,6 +738,10 @@ def generate(
                 "X-DiffSynth-Keyscale": keyscale if keyscale is not None else "model_default",
                 "X-DiffSynth-Timesignature": timesignature if timesignature is not None else "model_default",
                 "X-DiffSynth-Negative-Prompt-Source": negative_prompt_source,
+                "X-DiffSynth-Prosody-Source": prosody_source,
+                "X-DiffSynth-Input-Samples": str(input_samples),
+                "X-DiffSynth-Output-Samples": str(saved_samples),
+                "X-DiffSynth-Output-Duration": f"{saved_samples / 48000:.6f}",
                 "X-DiffSynth-Conditioning-Seconds": f"{conditioning_elapsed:.3f}",
                 "X-DiffSynth-Inference-Seconds": f"{infer_elapsed:.3f}",
                 "X-DiffSynth-Save-Seconds": f"{save_elapsed:.3f}",

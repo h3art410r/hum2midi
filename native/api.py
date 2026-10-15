@@ -43,6 +43,7 @@ SEED = int(os.getenv("NATIVE_SEED", "42"))
 CFG_SCALE = float(os.getenv("NATIVE_CFG_SCALE", "4"))
 STEPS = max(1, int(os.getenv("NATIVE_STEPS", "50")))
 CONTROL = os.getenv("NATIVE_CONTROL", "prosody")
+FULL_CLIP_GENERATION_CONTRACT = "full_clip_exact_input_samples_v1"
 
 app = FastAPI(title="Hum2Midi Native Demo")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
@@ -73,6 +74,20 @@ def _log(message: str, *, job_id: str | None = None, level: str = "INFO") -> Non
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _require_full_clip_worker(worker_health: dict[str, Any]) -> None:
+    if (
+        worker_health.get("status") != "ok"
+        or worker_health.get("supports_exact_duration") is not True
+        or worker_health.get("generation_contract") != FULL_CLIP_GENERATION_CONTRACT
+    ):
+        raise WorkerError(
+            "GPU Worker must support one full-clip TemplatePipeline call with exact input "
+            f"sample count (build={worker_health.get('build', 'unknown')}, "
+            f"contract={worker_health.get('generation_contract', 'missing')}); "
+            "update the Worker before generating"
+        )
 
 
 def _manifest_path(job_id: str) -> Path:
@@ -109,12 +124,23 @@ async def official_page() -> FileResponse:
 async def health() -> dict[str, Any]:
     worker = NativeWorkerClient()
     remote = worker.health()
-    status = "ok" if remote.get("status") == "ok" else "degraded"
+    full_clip_supported = (
+        remote.get("supports_exact_duration") is True
+        and remote.get("generation_contract") == FULL_CLIP_GENERATION_CONTRACT
+    )
+    status = (
+        "ok"
+        if remote.get("status") == "ok" and full_clip_supported
+        else "degraded"
+    )
     return {
         "status": status,
         "service": "hum2midi-native",
         "provider": "DiffSynth-Music Prosody",
         "worker": remote,
+        "generation_contract": (
+            FULL_CLIP_GENERATION_CONTRACT if full_clip_supported else None
+        ),
         "styles": list(STYLE_ORDER),
         "generation_lock": GENERATION_LOCK.locked(),
     }
@@ -364,9 +390,13 @@ async def _run_official_comparison(job: dict[str, Any]) -> None:
         OFFICIAL_STATE = {"status": "running", "job_id": job_id}
         _log("official Input 5 reproduction started", job_id=job_id)
         try:
+            source = Path(str(job["source_path"]))
+            worker = NativeWorkerClient()
+            worker_health = await asyncio.to_thread(worker.health)
+            _require_full_clip_worker(worker_health)
             diagnostics = await asyncio.to_thread(
-                NativeWorkerClient().generate,
-                Path(str(job["source_path"])),
+                worker.generate,
+                source,
                 output,
                 prompt=OFFICIAL_PROMPT,
                 lyrics=OFFICIAL_LYRICS,
@@ -375,6 +405,7 @@ async def _run_official_comparison(job: dict[str, Any]) -> None:
                 steps=int(OFFICIAL_PARAMS["steps"]),
                 control="prosody",
             )
+            diagnostics["duration_validation"] = _validate_exact_audio_duration(source, output)
             OFFICIAL_STATE = {
                 "status": "completed",
                 "job_id": job_id,
@@ -406,6 +437,7 @@ async def _run_generation(job_id: str) -> None:
         _save_job(job)
         _log("generation lock acquired", job_id=job_id)
         worker = NativeWorkerClient()
+        worker_health: dict[str, Any] | None = None
         source = Path(job["source_path"])
         try:
             for index, style in enumerate(STYLE_ORDER):
@@ -416,17 +448,24 @@ async def _run_generation(job_id: str) -> None:
                 _save_job(job)
                 _log(f"variant start style={style}", job_id=job_id)
                 started = time.perf_counter()
+                output = DATA / job_id / f"{style}.wav"
                 try:
+                    if worker_health is None:
+                        worker_health = await asyncio.to_thread(worker.health)
+                    _require_full_clip_worker(worker_health)
                     diagnostics = await asyncio.to_thread(
                         worker.generate,
                         source,
-                        DATA / job_id / f"{style}.wav",
+                        output,
                         prompt=variant["prompt"],
                         negative_prompt=variant["negative_prompt"],
                         seed=SEED,
                         cfg_scale=CFG_SCALE,
                         steps=STEPS,
                         control=CONTROL,
+                    )
+                    diagnostics["duration_validation"] = _validate_exact_audio_duration(
+                        source, output
                     )
                     variant.update(
                         {
@@ -552,3 +591,31 @@ def _audio_seconds(path: Path) -> float | None:
             return round(handle.getnframes() / handle.getframerate(), 3)
     except (OSError, wave.Error, ZeroDivisionError):
         return None
+
+
+def _validate_exact_audio_duration(source: Path, output: Path) -> dict[str, int]:
+    """Reject a Worker result unless its WAV has the source's exact sample count."""
+    try:
+        with wave.open(str(source), "rb") as handle:
+            source_rate = handle.getframerate()
+            source_samples = handle.getnframes()
+        with wave.open(str(output), "rb") as handle:
+            output_rate = handle.getframerate()
+            output_samples = handle.getnframes()
+    except (OSError, wave.Error) as exc:
+        raise WorkerError(f"Could not verify WAV sample counts: {exc}") from exc
+
+    if source_rate != 48000 or output_rate != 48000:
+        raise WorkerError(
+            f"Expected 48kHz source/output WAVs, got {source_rate}Hz/{output_rate}Hz"
+        )
+    if output_samples != source_samples:
+        raise WorkerError(
+            "Worker output sample count does not match the normalized input: "
+            f"input={source_samples}, output={output_samples}"
+        )
+    return {
+        "input_samples": source_samples,
+        "output_samples": output_samples,
+        "sample_rate": 48000,
+    }

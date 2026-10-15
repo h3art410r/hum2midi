@@ -39,14 +39,15 @@ git pull --ff-only origin main
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_diffsynth_worker_daemon.ps1 -Port 8765 -PollSeconds 30
 ```
 
-不要同时启动旧的 `remote.diffsynth_music_server` 和新 Worker。新守护进程启动的是 `native.worker_server:app`，运行官方 TemplatePipeline Quick Start 的 Prosody + Control 联合条件：
+不要同时启动旧的 `remote.diffsynth_music_server` 和新 Worker。新守护进程启动的是 `native.worker_server:app`；正式 Funk/Lo-fi 链路运行官方 `TemplatePipeline` Prosody-only 条件，其他 Worker 条件仅供明确隔离的实验请求使用：
 
-- `LoadMultiTrackAudio(division_factor=3840)`；
-- 直接对哼唱调用 `extract_prosody`，不做 vocal 分离；
-- `TemplatePipeline` 的 Control `model_id=0` 加 Prosody `model_id=1` 联合条件；Control 从规范化哼唱波形提供起音/节奏信息，Prosody 从同一波形生成保留音高与时间的正弦条件；
+- `LoadMultiTrackAudio(division_factor=3840)`；为满足块长只在模型输入末尾补静音，生成后裁掉对齐填充，输出恢复为上传归一化 WAV 的精确采样长度；不分段、不拼接；
+- `prosody_source=input|vocals` 是 Worker 内部 A/B 参数：`input` 对原始归一化波形调用 `extract_prosody`；`vocals` 按官方 Quick Start 先用 `pipe.extract_track(audio, track="vocals")`，再调用 `extract_prosody`。正式 API 暂保持 `input` 默认值，待同输入整段 A/B 验证后再决定是否切换；
+- 仅显式隔离的 `control=prosody_control` 实验会同时传入 Control `model_id=0` 和 Prosody `model_id=1`；正式 Funk/Lo-fi API 不启用组合条件；
 - 正式 Funk/Lo-fi 任务使用 `native/prompts.py` 中按风格配置的负向文本；官方对照任务不传该字段时仍回退到 `pipe.default_negative_prompt`，Prosody 负向模板始终传同一份条件波形；
-- 两条条件分别编码后由官方 `TemplatePipeline` 拼接 KV memory，不拼接波形、不使用 `target_audio`，因此不会把原始哼唱直接混回输出；默认 `tiled=True`、CFG 4、50 steps、seed 42、输出时长等于 Prosody 条件时长；
+- 每个风格对整段输入只调用一次官方 `TemplatePipeline`，不按乐句分段生成，也不拼接模型输出。项目规定的 5–15 秒输入最多对应 376 个音频 latent 位置，小于官方 VAE 默认 512 的 tile 大小；因此 `tiled=True` 在此时长内仍是一整块 VAE 解码。输出按输入尾部补零满足 3840 样本块，再裁回归一化输入的精确采样数；默认 CFG 4、50 steps、seed 42；
 - 输出通过 `soundfile` 保存为 48kHz PCM WAV，避免 TorchCodec 可选依赖导致保存失败。
+- `/health` 必须同时声明 `supports_exact_duration=true` 和 `generation_contract=full_clip_exact_input_samples_v1`；Native API 对每个输出实际读取 WAV 帧数与输入比对。旧 Worker、契约缺失或不等长结果都会显示降级/失败，不会作为已完成音频交付。
 - 如果当前 `torchaudio` 安装把读取转发到缺失的 TorchCodec，Worker 会记录该事件并用 `soundfile` 读取已经规范化的 PCM WAV；张量形状、48kHz 和 3840 对齐保持与官方加载器一致。
 
 Worker 的详细阶段日志可读：
