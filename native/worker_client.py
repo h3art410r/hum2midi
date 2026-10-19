@@ -57,6 +57,7 @@ class NativeWorkerClient:
         seed: int,
         cfg_scale: float,
         steps: int,
+        output_duration_seconds: float | None = None,
         control: str = "prosody",
         prosody_source: str = "input",
         reference_audio: Path | None = None,
@@ -93,6 +94,11 @@ class NativeWorkerClient:
             raise WorkerError("Control audio branches must be 'positive', 'zero', or 'both'")
         if prosody_source not in {"input", "vocals"}:
             raise WorkerError("Prosody source must be 'input' or 'vocals'")
+        if output_duration_seconds is not None:
+            if control != "prosody":
+                raise WorkerError("Long output duration is only valid for Prosody-only experiments")
+            if output_duration_seconds not in {30.0, 60.0}:
+                raise WorkerError("Long output duration must be 30 or 60 seconds")
         if control_audio_branches in {"zero", "both"} and control_audio is None:
             raise WorkerError("Control audio in negative CFG branch requires a separate control_audio")
         fields = {
@@ -106,6 +112,8 @@ class NativeWorkerClient:
         }
         if negative_prompt:
             fields["negative_prompt"] = negative_prompt
+        if output_duration_seconds is not None:
+            fields["output_duration_seconds"] = str(output_duration_seconds)
         if bpm is not None:
             fields["bpm"] = str(bpm)
         if keyscale is not None:
@@ -201,6 +209,7 @@ class NativeWorkerClient:
             "x-diffsynth-input-samples",
             "x-diffsynth-output-samples",
             "x-diffsynth-output-duration",
+            "x-diffsynth-requested-duration",
         ):
             if headers.get(key):
                 diagnostics[key.removeprefix("x-diffsynth-").replace("-", "_")] = headers[key]

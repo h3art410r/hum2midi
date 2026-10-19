@@ -353,6 +353,7 @@ def generate(
     seed: int = Form(42),
     cfg_scale: float = Form(4),
     steps: int = Form(50),
+    output_duration_seconds: float | None = Form(None),
     control: str = Form("prosody"),
     prosody_source: str = Form("input"),
     bpm: float | None = Form(None),
@@ -366,6 +367,11 @@ def generate(
         raise HTTPException(401, "Invalid worker token")
     if control not in {"prosody", "control", "prosody_control", "prosody_reference"}:
         raise HTTPException(400, "Unsupported conditioning mode")
+    if output_duration_seconds is not None:
+        if control != "prosody":
+            raise HTTPException(400, "output_duration_seconds is only valid for Prosody-only experiments")
+        if output_duration_seconds not in {30.0, 60.0}:
+            raise HTTPException(400, "output_duration_seconds must be 30 or 60 for this experiment")
     if prosody_source not in {"input", "vocals"}:
         raise HTTPException(400, "prosody_source must be 'input' or 'vocals'")
     if control == "prosody_reference" and reference_audio is None:
@@ -414,6 +420,9 @@ def generate(
         bpm=bpm if bpm is not None else "model_default",
         keyscale=keyscale if keyscale is not None else "model_default",
         timesignature=timesignature if timesignature is not None else "model_default",
+        output_duration_seconds=(
+            output_duration_seconds if output_duration_seconds is not None else "conditioning_length"
+        ),
         prosody_source=prosody_source,
         control_audio_branches=control_audio_branches,
         control_audio_tracks=selected_control_tracks,
@@ -600,6 +609,7 @@ def generate(
                     limiter_gain=f"{mix_stats['limiter_gain']:.6f}",
                 )
         duration = prosody.shape[1] / 48000
+        target_duration = output_duration_seconds if output_duration_seconds is not None else duration
         conditioning_elapsed = time.perf_counter() - conditioning_started
         _log(
             "CONDITIONS_READY",
@@ -608,6 +618,7 @@ def generate(
             waveform_shape=tuple(waveform.shape),
             prosody_shape=tuple(prosody.shape),
             duration=f"{duration:.3f}s",
+            target_duration=f"{target_duration:.3f}s",
             original_duration=f"{input_samples / 48000:.6f}s",
             prosody_source=prosody_source,
             elapsed=f"{conditioning_elapsed:.3f}s",
@@ -670,17 +681,15 @@ def generate(
             template_models=','.join(str(item["model_id"]) for item in template_inputs),
             negative_template_models=','.join(str(item["model_id"]) for item in negative_template_inputs),
         )
-        # One full-duration TemplatePipeline call per requested style. Do not
-        # split the source into phrases or concatenate separately generated audio.
-        # At the product's 5–15s range the official music VAE uses at most 376
-        # latent positions, below its default 512-position tile, so tiled=True
-        # decodes this clip as a single VAE tile as well.
+        # One full-duration TemplatePipeline call per request. This opt-in
+        # experiment changes only target duration; the source remains one
+        # Prosody condition and model output is not split or stitched.
         result = TEMPLATE(
             PIPE,
             prompt=prompt,
             negative_prompt=requested_negative_prompt or PIPE.default_negative_prompt,
             lyrics=lyrics,
-            duration=duration,
+            duration=target_duration,
             seed=seed,
             tiled=True,
             cfg_scale=cfg_scale,
@@ -698,13 +707,18 @@ def generate(
         peak_reserved = torch.cuda.max_memory_reserved() / 1024**3 if torch.cuda.is_available() else 0.0
         _log("MODEL_INFER_DONE", request_id, elapsed=f"{infer_elapsed:.3f}s", result_shape=tuple(result.shape), peak_allocated_gb=f"{peak_allocated:.3f}", peak_reserved_gb=f"{peak_reserved:.3f}")
         save_started = time.perf_counter()
-        if result.shape[-1] < input_samples:
+        expected_output_samples = (
+            int(round(target_duration * 48000))
+            if output_duration_seconds is not None
+            else input_samples
+        )
+        if result.shape[-1] < expected_output_samples:
             raise RuntimeError(
-                "DiffSynth returned audio shorter than the normalized input; refusing to "
-                "append silence to hide a generation truncation"
+                "DiffSynth returned audio shorter than the requested output duration; "
+                "refusing to append silence to hide a generation truncation"
             )
-        if result.shape[-1] > input_samples:
-            result = result[..., :input_samples]
+        if result.shape[-1] > expected_output_samples:
+            result = result[..., :expected_output_samples]
         saved_samples = int(result.shape[-1])
         sf.write(str(output_path), result.detach().float().cpu().numpy().T, 48000, subtype="PCM_16")
         save_elapsed = time.perf_counter() - save_started
@@ -742,6 +756,7 @@ def generate(
                 "X-DiffSynth-Input-Samples": str(input_samples),
                 "X-DiffSynth-Output-Samples": str(saved_samples),
                 "X-DiffSynth-Output-Duration": f"{saved_samples / 48000:.6f}",
+                "X-DiffSynth-Requested-Duration": f"{target_duration:.6f}",
                 "X-DiffSynth-Conditioning-Seconds": f"{conditioning_elapsed:.3f}",
                 "X-DiffSynth-Inference-Seconds": f"{infer_elapsed:.3f}",
                 "X-DiffSynth-Save-Seconds": f"{save_elapsed:.3f}",

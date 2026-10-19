@@ -38,3 +38,5 @@ DIFFSYNTH_REMOTE_TOKEN=与服务端相同的token
 ## 请求语义
 
 开发机发送 `prompt`、输入时长、seed、CFG、步数和 `control_profile=prosody`。Worker 只实现官方 `TemplatePipeline` 调用并使用 model 1。默认采用官方示例的 seed=42、CFG=4、steps=50；输入统一为 48kHz，Worker 将单一有效声道镜像到两个相同声道并按 3840 样本对齐，时长从 prosody 实际长度推导。旧的 `use_input_audio`、`denoising_strength`、KV-cache 合并和手工分步推理参数已删除。
+
+为验证短哼唱能否支撑更长编曲，Worker 的直连实验请求可显式传 `output_duration_seconds=30` 或 `60`。该字段只影响这次单次 `TemplatePipeline` 调用的目标时长，Prosody 条件仍是原始短音频；省略字段时仍按输入长度生成。该实验字段不由 `native.api` 暴露，不改变正式输入输出等长契约。
